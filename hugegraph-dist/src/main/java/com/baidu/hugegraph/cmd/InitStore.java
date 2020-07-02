@@ -62,18 +62,13 @@ public class InitStore {
     }
 
     public static void main(String[] args) throws Exception {
-        E.checkArgument(args.length == 2,
-                        "HugeGraph init-store need to pass 2 parameters, " +
-                        "they are the config files of GremlinServer and " +
-                        "RestServer, for example: conf/gremlin-server.yaml " +
-                        "conf/rest-server.properties");
-        E.checkArgument(args[0].endsWith(".yaml"),
-                        "Expect the 1st parameter is yaml config file");
-        E.checkArgument(args[1].endsWith(".properties"),
-                        "Expect the 2nd parameter is properties config file");
+        E.checkArgument(args.length == 1,
+                        "HugeGraph init-store need to pass the config file " +
+                        "of RestServer, like: conf/rest-server.properties");
+        E.checkArgument(args[0].endsWith(".properties"),
+                        "Expect the parameter is properties config file.");
 
-        String gremlinConf = args[0];
-        String restConf = args[1];
+        String restConf = args[0];
 
         RegisterUtil.registerBackends();
         RegisterUtil.registerPlugins();
@@ -81,9 +76,6 @@ public class InitStore {
 
         HugeConfig restServerConfig = new HugeConfig(restConf);
         String graphsDir = restServerConfig.get(ServerOptions.GRAPHS);
-
-        Map<String, String> gremlinGraphs = ConfigUtil.parseGremlinGraphs(
-                                            gremlinConf);
 
         Map<String, String> graphConfs = ConfigUtil.scanGraphsDir(graphsDir);
         List<String> sortedGraphNames = new ArrayList<>(graphConfs.keySet());
@@ -107,9 +99,6 @@ public class InitStore {
         for (String graphName : sortedGraphNames) {
             initGraph(graphConfs.get(graphName));
         }
-        // In order to RestServer can read all the graphs
-        // TODO: after copied, next merge will trigger conflict
-        ConfigUtil.copyFiles(graphsDir, gremlinGraphs);
 
         StandardAuthenticator.initAdminUserIfNeeded(restConf);
 
