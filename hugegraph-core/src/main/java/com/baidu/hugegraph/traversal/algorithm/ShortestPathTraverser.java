@@ -83,7 +83,7 @@ public class ShortestPathTraverser extends HugeTraverser {
             checkCapacity(traverser.capacity, traverser.accessed(),
                           "shortest path");
         }
-        return paths.isEmpty() ? Path.EMPTY_PATH : paths.iterator().next();
+        return paths.isEmpty() ? Path.EMPTY : paths.iterator().next();
     }
 
     public Path shortestPath(Id sourceV, Id targetV, EdgeStep step,
