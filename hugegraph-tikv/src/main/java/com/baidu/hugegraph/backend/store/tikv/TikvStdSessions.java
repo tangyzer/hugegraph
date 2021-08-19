@@ -21,14 +21,10 @@ package com.baidu.hugegraph.backend.store.tikv;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -36,18 +32,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.commons.lang3.tuple.Pair;
 import org.tikv.common.TiConfiguration;
 import org.tikv.common.TiSession;
-import org.tikv.common.key.Key;
 import org.tikv.kvproto.Kvrpcpb;
 import org.tikv.raw.RawKVClient;
-import org.tikv.shade.com.google.protobuf.ByteString;
 
 import com.baidu.hugegraph.backend.store.BackendEntry;
 import com.baidu.hugegraph.backend.store.BackendEntry.BackendColumnIterator;
 import com.baidu.hugegraph.backend.store.BackendEntryIterator;
 import com.baidu.hugegraph.config.HugeConfig;
-import com.baidu.hugegraph.util.Bytes;
 import com.baidu.hugegraph.util.E;
-import com.baidu.hugegraph.util.StringEncoding;
 import com.google.protobuf.ByteString;
 
 public class TikvStdSessions extends TikvSessions {
@@ -209,7 +201,7 @@ public class TikvStdSessions extends TikvSessions {
 
         @Override
         public Pair<byte[], byte[]> keyRange(String table) {
-            // TODO: get first key and lastkey of fake tikv table
+            // TODO: implement
             return null;
         }
 
@@ -218,19 +210,12 @@ public class TikvStdSessions extends TikvSessions {
          */
         @Override
         public void put(String table, byte[] key, byte[] value) {
-            this.putBatch.put(ByteString.copyFrom(key), ByteString.copyFrom(value));
+            // TODO: implement
         }
 
         @Override
         public synchronized void increase(String table, byte[] key, byte[] value) {
-            long old = 0L;
-            byte[] oldValue = this.get(table, key);
-            if (oldValue.length != 0) {
-                old = this.l(oldValue);
-            }
-            ByteString newValue = ByteString.copyFrom(
-                                  this.b(old + this.l(value)));
-            tikv().put(ByteString.copyFrom(key), newValue);
+            // TODO: implement
         }
 
         @Override
@@ -247,32 +232,27 @@ public class TikvStdSessions extends TikvSessions {
 
         @Override
         public byte[] get(String table, byte[] key) {
-            return tikv().get(ByteString.copyFrom(key)).toByteArray();
+            // TODO: implement
+            return null;
         }
 
         @Override
         public BackendColumnIterator scan(String table) {
-            assert !this.hasChanges();
-            List<Kvrpcpb.KvPair> results = tikv().scan(ByteString.EMPTY,
-                                                       1000000);
-            return new ColumnIterator(table, results);
+            // TODO: implement
+            return null;
         }
 
         @Override
         public BackendColumnIterator scan(String table, byte[] prefix) {
-            assert !this.hasChanges();
-            List<Kvrpcpb.KvPair> results = tikv().scanPrefix(ByteString.copyFrom(prefix));
-            return new ColumnIterator(table, results);
+            // TODO: implement
+            return null;
         }
 
         @Override
         public BackendColumnIterator scan(String table, byte[] keyFrom,
                                           byte[] keyTo, int scanType) {
-            assert !this.hasChanges();
-            List<Kvrpcpb.KvPair> results;
-            results = tikv().scan(ByteString.copyFrom(keyFrom),
-                                  ByteString.copyFrom(keyTo), 5000);
-            return new ColumnIterator(table, results, keyFrom, keyTo, scanType);
+            // TODO: implement
+            return null;
         }
 
         private byte[] b(long value) {
@@ -304,8 +284,6 @@ public class TikvStdSessions extends TikvSessions {
         private final int scanType;
 
         private byte[] position;
-        private byte[] value;
-        private boolean matched;
 
         public ColumnIterator(String table, List<Kvrpcpb.KvPair> results) {
             this(table, results, null, null, 0);
@@ -320,56 +298,6 @@ public class TikvStdSessions extends TikvSessions {
             this.keyBegin = keyBegin;
             this.keyEnd = keyEnd;
             this.scanType = scanType;
-
-            this.position = keyBegin;
-            this.value = null;
-            this.matched = false;
-
-            this.checkArguments();
-        }
-
-        private void checkArguments() {
-            E.checkArgument(!(this.match(Session.SCAN_PREFIX_BEGIN) &&
-                              this.match(Session.SCAN_PREFIX_END)),
-                            "Can't set SCAN_PREFIX_WITH_BEGIN and " +
-                            "SCAN_PREFIX_WITH_END at the same time");
-
-            E.checkArgument(!(this.match(Session.SCAN_PREFIX_BEGIN) &&
-                              this.match(Session.SCAN_GT_BEGIN)),
-                            "Can't set SCAN_PREFIX_WITH_BEGIN and " +
-                            "SCAN_GT_BEGIN/SCAN_GTE_BEGIN at the same time");
-
-            E.checkArgument(!(this.match(Session.SCAN_PREFIX_END) &&
-                              this.match(Session.SCAN_LT_END)),
-                            "Can't set SCAN_PREFIX_WITH_END and " +
-                            "SCAN_LT_END/SCAN_LTE_END at the same time");
-
-            if (this.match(Session.SCAN_PREFIX_BEGIN)) {
-                E.checkArgument(this.keyBegin != null,
-                                "Parameter `keyBegin` can't be null " +
-                                "if set SCAN_PREFIX_WITH_BEGIN");
-                E.checkArgument(this.keyEnd == null,
-                                "Parameter `keyEnd` must be null " +
-                                "if set SCAN_PREFIX_WITH_BEGIN");
-            }
-
-            if (this.match(Session.SCAN_PREFIX_END)) {
-                E.checkArgument(this.keyEnd != null,
-                                "Parameter `keyEnd` can't be null " +
-                                "if set SCAN_PREFIX_WITH_END");
-            }
-
-            if (this.match(Session.SCAN_GT_BEGIN)) {
-                E.checkArgument(this.keyBegin != null,
-                                "Parameter `keyBegin` can't be null " +
-                                "if set SCAN_GT_BEGIN or SCAN_GTE_BEGIN");
-            }
-
-            if (this.match(Session.SCAN_LT_END)) {
-                E.checkArgument(this.keyEnd != null,
-                                "Parameter `keyEnd` can't be null " +
-                                "if set SCAN_LT_END or SCAN_LTE_END");
-            }
         }
 
         private boolean match(int expected) {
@@ -378,76 +306,14 @@ public class TikvStdSessions extends TikvSessions {
 
         @Override
         public boolean hasNext() {
-            // Update position for paging
-            if (!this.iter.hasNext()) {
-                return false;
-            }
-            this.position = this.iter.next().getKey().toByteArray();
-            this.value = this.iter.next().getValue().toByteArray();
-
-            // Do filter if not SCAN_ANY
-            if (!this.match(Session.SCAN_ANY)) {
-                this.matched = this.filter(this.position);
-            }
-            if (!this.matched) {
-                // The end
-                this.position = null;
-                // Free the iterator if finished
-                this.close();
-            }
-            return this.matched;
-        }
-
-        private boolean filter(byte[] key) {
-            if (this.match(Session.SCAN_PREFIX_BEGIN)) {
-                /*
-                 * Prefix with `keyBegin`?
-                 * TODO: use custom prefix_extractor instead
-                 *       or use ReadOptions.prefix_same_as_start
-                 */
-                return Bytes.prefixWith(key, this.keyBegin);
-            } else if (this.match(Session.SCAN_PREFIX_END)) {
-                /*
-                 * Prefix with `keyEnd`?
-                 * like the following query for range index:
-                 *  key > 'age:20' and prefix with 'age'
-                 */
-                assert this.keyEnd != null;
-                return Bytes.prefixWith(key, this.keyEnd);
-            } else if (this.match(Session.SCAN_LT_END)) {
-                /*
-                 * Less (equal) than `keyEnd`?
-                 * NOTE: don't use BytewiseComparator due to signed byte
-                 */
-                assert this.keyEnd != null;
-                if (this.match(Session.SCAN_LTE_END)) {
-                    // Just compare the prefix, can be there are excess tail
-                    key = Arrays.copyOfRange(key, 0, this.keyEnd.length);
-                    return Bytes.compare(key, this.keyEnd) <= 0;
-                } else {
-                    return Bytes.compare(key, this.keyEnd) < 0;
-                }
-            } else {
-                assert this.match(Session.SCAN_ANY) ||
-                       this.match(Session.SCAN_GT_BEGIN) ||
-                       this.match(Session.SCAN_GTE_BEGIN) :
-                       "Unknow scan type";
-                return true;
-            }
+            return this.iter.hasNext();
         }
 
         @Override
         public BackendEntry.BackendColumn next() {
-            if (!this.matched) {
-                if (!this.hasNext()) {
-                    throw new NoSuchElementException();
-                }
-            }
-            BackendEntry.BackendColumn col = BackendEntry.BackendColumn.of(
-                                             this.position, this.value);
-            this.matched = false;
-
-            return col;
+            this.position = this.iter.next().getKey();
+            return BackendEntry.BackendColumn.of(this.position,
+                                                 this.iter.next().getValue());
         }
 
         @Override
@@ -456,7 +322,6 @@ public class TikvStdSessions extends TikvSessions {
             while (this.hasNext()) {
                 this.next();
                 count++;
-                this.matched = false;
                 BackendEntryIterator.checkInterrupted();
             }
             return count;
