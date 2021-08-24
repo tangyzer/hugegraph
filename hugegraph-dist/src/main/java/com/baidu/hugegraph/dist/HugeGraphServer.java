@@ -94,7 +94,6 @@ public class HugeGraphServer {
             LOG.error(msg);
             throw new HugeException(msg);
         }
-
         
         HugeRestServer.register();
 
