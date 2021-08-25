@@ -21,15 +21,19 @@ package com.baidu.hugegraph.core;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.nio.charset.Charset;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.configuration.PropertiesConfiguration;
+import org.apache.logging.log4j.util.Strings;
 import org.apache.tinkerpop.gremlin.server.auth.AuthenticationException;
 import org.apache.tinkerpop.gremlin.server.util.MetricManager;
 import org.apache.tinkerpop.gremlin.structure.Graph;
@@ -37,10 +41,11 @@ import org.apache.tinkerpop.gremlin.structure.Transaction;
 import org.apache.tinkerpop.gremlin.structure.util.GraphFactory;
 import org.slf4j.Logger;
 
+import com.baidu.hugegraph.HugeException;
 import com.baidu.hugegraph.HugeFactory;
 import com.baidu.hugegraph.HugeGraph;
-import com.baidu.hugegraph.auth.AuthManager;
 import com.baidu.hugegraph.api.API;
+import com.baidu.hugegraph.auth.AuthManager;
 import com.baidu.hugegraph.auth.HugeAuthenticator;
 import com.baidu.hugegraph.auth.HugeFactoryAuthProxy;
 import com.baidu.hugegraph.auth.HugeGraphAuthProxy;
@@ -66,34 +71,67 @@ import com.baidu.hugegraph.serializer.JsonSerializer;
 import com.baidu.hugegraph.serializer.Serializer;
 import com.baidu.hugegraph.server.RestServer;
 import com.baidu.hugegraph.task.TaskManager;
+import com.baidu.hugegraph.type.define.CollectionType;
 import com.baidu.hugegraph.type.define.GraphMode;
 import com.baidu.hugegraph.type.define.NodeRole;
 import com.baidu.hugegraph.util.ConfigUtil;
 import com.baidu.hugegraph.util.E;
 import com.baidu.hugegraph.util.Events;
 import com.baidu.hugegraph.util.Log;
+import com.baidu.hugegraph.util.collection.CollectionFactory;
+
+import io.etcd.jetcd.ByteSequence;
+import io.etcd.jetcd.Client;
+import io.etcd.jetcd.KV;
+import io.etcd.jetcd.KeyValue;
+import io.etcd.jetcd.kv.GetResponse;
+import io.etcd.jetcd.options.GetOption;
+import io.etcd.jetcd.watch.WatchEvent;
+import io.etcd.jetcd.watch.WatchResponse;
 
 public final class GraphManager {
 
     private static final Logger LOG = Log.logger(RestServer.class);
 
+    private static final String ETCD_PATH_TEMPLATE = "/hugegraph/%s/%s/%s";
+    private static final String ETCD_GRAPH_CONF = "graph-configs";
+    private static final String ETCD_GRAPH_MANAGE = "graph-manage";
+    private static final String ETCD_GRAPH_ADD = "graph-add";
+    private static final String ETCD_GRAPH_REMOVE = "graph-remove";
+
     private final String graphsDir;
+    private final String cluster;
     private final Map<String, Graph> graphs;
+    private final Set<String> removingGraphs;
     private final HugeAuthenticator authenticator;
     private final RpcServer rpcServer;
     private final RpcClientProvider rpcClient;
+    private final Client etcdClient;
 
     private final EventHub eventHub;
 
     public GraphManager(HugeConfig conf, EventHub hub) {
         this.graphsDir = conf.get(ServerOptions.GRAPHS);
+        this.cluster = conf.get(ServerOptions.CLUSTER);
         this.graphs = new ConcurrentHashMap<>();
+        this.removingGraphs = ConcurrentHashMap.newKeySet();
         this.authenticator = HugeAuthenticator.loadAuthenticator(conf);
         this.rpcServer = new RpcServer(conf);
         this.rpcClient = new RpcClientProvider(conf);
+
         this.eventHub = hub;
         this.listenChanges();
+
+        // Init etcd client
+        List<String> etcds = conf.get(ServerOptions.ETCDS);
+        this.etcdClient = Client.builder()
+                                .endpoints(etcds.toArray(new String[0]))
+                                .build();
+        // Load graphs configured in local conf/graphs directory
         this.loadGraphs(ConfigUtil.scanGraphsDir(this.graphsDir));
+        // Load graphs configured in etcd
+        this.loadGraphsFromEtcd(this.graphConfigs());
+
         // this.installLicense(conf, "");
         // Raft will load snapshot firstly then launch election and replay log
         this.waitGraphsStarted();
@@ -101,6 +139,12 @@ public final class GraphManager {
         this.startRpcServer();
         this.serverStarted(conf);
         this.addMetrics(conf);
+
+        // Watch dynamically graph add/remove
+        this.etcdClient.getWatchClient().watch(this.graphAdd(),
+                                               this::listenEtcdGraphAdd);
+        this.etcdClient.getWatchClient().watch(this.graphRemove(),
+                                               this::listenEtcdGraphRemove);
     }
 
     public void destroy() {
@@ -112,7 +156,7 @@ public final class GraphManager {
             LOG.debug("RestServer accepts event 'graph.create'");
             event.checkArgs(HugeGraph.class);
             HugeGraph graph = (HugeGraph) event.args()[0];
-            this.graphs.put(graph.name(), graph);
+            this.graphs.putIfAbsent(graph.name(), graph);
             return null;
         });
         this.eventHub.listen(Events.GRAPH_DROP, event -> {
@@ -138,6 +182,19 @@ public final class GraphManager {
                 this.loadGraph(name, path);
             } catch (RuntimeException e) {
                 LOG.error("Graph '{}' can't be loaded: '{}'", name, path, e);
+            }
+        }
+    }
+
+    public void loadGraphsFromEtcd(final Map<String, String> graphConfs) {
+        for (Map.Entry<String, String> conf : graphConfs.entrySet()) {
+            String name = conf.getKey();
+            String config = conf.getValue();
+            HugeFactory.checkGraphName(name, "rest-server.properties");
+            try {
+                this.createGraph(name, config, false);
+            } catch (RuntimeException e) {
+                LOG.error("Graph '{}' can't be loaded: '{}'", name, config, e);
             }
         }
     }
@@ -173,10 +230,64 @@ public final class GraphManager {
             cloneConfig.setProperty(key, propConfig.getProperty(key));
         });
         this.checkOptions(cloneConfig);
-        return this.createGraph(cloneConfig);
+        return this.createGraph(cloneConfig, true);
     }
 
-    public HugeGraph createGraph(String name, String configText) {
+    private void listenEtcdGraphAdd(WatchResponse response) {
+        for (WatchEvent event : response.getEvents()) {
+            // Skip if not etcd PUT event
+            if (!isEtcdPut(event)) {
+                return;
+            }
+
+            // Get graph name from .../graph-manage/graph-add
+            String graphName = event.getKeyValue().getValue()
+                                    .toString(Charset.defaultCharset());
+
+            // Get graph config from .../graph-configs/xxx
+            List<KeyValue> keyValues;
+            KV kvClient = this.etcdClient.getKVClient();
+            try {
+                keyValues = kvClient.get(this.graphConf(graphName))
+                                    .get().getKvs();
+            } catch (InterruptedException e) {
+                throw new HugeException("Interrupted when read " +
+                                        "graph config from etcd", e);
+            } catch (ExecutionException e) {
+                throw new HugeException("ExecutionException occurs when " +
+                                        "read graph config from etcd", e);
+            }
+            E.checkState(keyValues.size() == 1,
+                         "There must be only one config with graph name '%s'",
+                         graphName);
+            String config = keyValues.get(0).getValue()
+                                     .toString(Charset.defaultCharset());
+
+            // Create graph without init
+            this.createGraph(graphName, config, false);
+        }
+    }
+
+    private void listenEtcdGraphRemove(WatchResponse response) {
+        for (WatchEvent event : response.getEvents()) {
+            // Skip if not etcd PUT event
+            if (!isEtcdPut(event)) {
+                return;
+            }
+
+            // Get graph name from .../graph-manage/graph-remove
+            String graphName = event.getKeyValue().getValue()
+                                    .toString(Charset.defaultCharset());
+            if (this.removingGraphs.contains(graphName)) {
+                continue;
+            }
+
+            // Remove graph without clear
+            this.dropGraph(graphName, false);
+        }
+    }
+
+    public HugeGraph createGraph(String name, String configText, boolean init) {
         E.checkArgumentNotNull(name, "The graph name can't be null");
         E.checkArgument(!this.graphs().contains(name),
                         "The graph name '%s' has existed", name);
@@ -184,10 +295,27 @@ public final class GraphManager {
         PropertiesConfiguration propConfig = this.buildConfig(configText);
         HugeConfig config = new HugeConfig(propConfig);
         this.checkOptions(config);
-        return this.createGraph(config);
+        HugeGraph graph = this.createGraph(config, init);
+        if (init) {
+            KV kvClient = this.etcdClient.getKVClient();
+            try {
+                kvClient.put(this.graphConf(name),
+                             toByteSequence(configText)).get();
+                kvClient.put(this.graphAdd(), toByteSequence(name)).get();
+            } catch (InterruptedException | ExecutionException e) {
+                try {
+                    kvClient.delete(this.graphConf(name)).get();
+                    kvClient.delete(this.graphAdd()).get();
+                } catch (Throwable t) {
+                    throw new HugeException(
+                              "Failed to upload graph config of '%s'", name, e);
+                }
+            }
+        }
+        return graph;
     }
 
-    private HugeGraph createGraph(HugeConfig config) {
+    private HugeGraph createGraph(HugeConfig config, boolean init) {
         // open succeed will fill graph instance into HugeFactory graphs(map)
         HugeGraph graph = (HugeGraph) GraphFactory.open(config);
         if (this.requireAuthentication()) {
@@ -198,16 +326,16 @@ public final class GraphManager {
              */
             graph.mode(GraphMode.NONE);
         }
-        try {
-            graph.initBackend();
-        } catch (BackendException e) {
-            HugeFactory.remove(graph);
-            throw e;
+        if (init) {
+            try {
+                graph.initBackend();
+            } catch (BackendException e) {
+                HugeFactory.remove(graph);
+                throw e;
+            }
         }
         // Let gremlin server and rest server context add graph
         this.eventHub.notify(Events.GRAPH_CREATE, graph);
-        // Write config to disk file
-        ConfigUtil.writeToFile(this.graphsDir, graph.name(), config);
         return graph;
     }
 
@@ -235,22 +363,31 @@ public final class GraphManager {
         }
     }
 
-    public void dropGraph(String name) {
+    public void dropGraph(String name, boolean clear) {
         HugeGraph g = this.graph(name);
         E.checkArgumentNotNull(g, "The graph '%s' doesn't exist", name);
         E.checkArgument(this.graphs.size() > 1,
-                        "The graph '%s' is the only one, not allowed to delete",
-                        name);
-        g.clearBackend();
-        try {
-            g.close();
-        } catch (Exception e) {
-            LOG.warn("Failed to close graph", e);
+                        "The graph '%s' is the only one, " +
+                        "not allowed to delete", name);
+        this.removingGraphs.add(name);
+        if (clear) {
+            KV kvClient = this.etcdClient.getKVClient();
+            try {
+                kvClient.delete(this.graphConf(name)).get();
+                kvClient.put(this.graphRemove(), toByteSequence(name)).get();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new HugeException(
+                          "Failed to remove graph config of '%s'", name, e);
+            }
+            g.clearBackend();
+            try {
+                g.close();
+            } catch (Exception e) {
+                LOG.warn("Failed to close graph", e);
+            }
         }
         // Let gremlin server and rest server context remove graph
         this.eventHub.notify(Events.GRAPH_DROP, name);
-        HugeConfig config = (HugeConfig) g.configuration();
-        ConfigUtil.deleteFile(config.getFile());
     }
 
     public Set<String> graphs() {
@@ -358,7 +495,8 @@ public final class GraphManager {
     }
 
     private HugeAuthenticator authenticator() {
-        E.checkState(this.authenticator != null, "Unconfigured authenticator");
+        E.checkState(this.authenticator != null,
+                     "Unconfigured authenticator");
         return this.authenticator;
     }
 
@@ -454,9 +592,8 @@ public final class GraphManager {
 
         // Add metrics for MAX_WRITE_THREADS
         int maxWriteThreads = config.get(ServerOptions.MAX_WRITE_THREADS);
-        MetricsUtil.registerGauge(RestServer.class, "max-write-threads", () -> {
-            return maxWriteThreads;
-        });
+        MetricsUtil.registerGauge(RestServer.class, "max-write-threads",
+                                  () -> maxWriteThreads);
 
         // Add metrics for caches
         @SuppressWarnings({ "rawtypes", "unchecked" })
@@ -475,12 +612,10 @@ public final class GraphManager {
         });
 
         // Add metrics for task
-        MetricsUtil.registerGauge(TaskManager.class, "workers", () -> {
-            return TaskManager.instance().workerPoolSize();
-        });
-        MetricsUtil.registerGauge(TaskManager.class, "pending-tasks", () -> {
-            return TaskManager.instance().pendingTasks();
-        });
+        MetricsUtil.registerGauge(TaskManager.class, "workers",
+                                  () -> TaskManager.instance().workerPoolSize());
+        MetricsUtil.registerGauge(TaskManager.class, "pending-tasks",
+                                  () -> TaskManager.instance().pendingTasks());
     }
 
     private void checkOptionsUnique(HugeConfig config,
@@ -519,5 +654,52 @@ public final class GraphManager {
             MetricsUtil.registerGauge(Cache.class, size, () -> cache.size());
             MetricsUtil.registerGauge(Cache.class, cap, () -> cache.capacity());
         }
+    }
+
+    private Map<String, String> graphConfigs() {
+        ByteSequence prefix = this.graphConf(Strings.EMPTY);
+        GetOption getOption = GetOption.newBuilder().withPrefix(prefix).build();
+        GetResponse response;
+        try {
+            response = this.etcdClient.getKVClient()
+                                      .get(prefix, getOption).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new HugeException("Failed to scan graph config from etcd", e);
+        }
+        int size = (int) response.getCount();
+        Map<String, String> graphConfigs =
+                            CollectionFactory.newMap(CollectionType.JCF, size);
+        for (KeyValue kv : response.getKvs()) {
+            String key = kv.getKey().toString(Charset.defaultCharset());
+            String[] parts = key.split("/");
+            graphConfigs.put(parts[parts.length - 1],
+                             kv.getValue().toString(Charset.defaultCharset()));
+        }
+        return graphConfigs;
+    }
+
+    private ByteSequence graphAdd() {
+        return toByteSequence(String.format(ETCD_PATH_TEMPLATE, this.cluster,
+                                            ETCD_GRAPH_MANAGE, ETCD_GRAPH_ADD));
+    }
+
+    private ByteSequence graphRemove() {
+        return toByteSequence(String.format(ETCD_PATH_TEMPLATE,
+                                            this.cluster,
+                                            ETCD_GRAPH_MANAGE,
+                                            ETCD_GRAPH_REMOVE));
+    }
+
+    private ByteSequence graphConf(String graph) {
+        return toByteSequence(String.format(ETCD_PATH_TEMPLATE, this.cluster,
+                                            ETCD_GRAPH_CONF, graph));
+    }
+
+    private static ByteSequence toByteSequence(String content) {
+        return ByteSequence.from(content.getBytes());
+    }
+
+    private static boolean isEtcdPut(WatchEvent event) {
+        return event.getEventType() == WatchEvent.EventType.PUT;
     }
 }

@@ -130,7 +130,7 @@ public class GraphsAPI extends API {
             LOG.debug("Drop graph by name '{}'", name);
             E.checkArgument(CONFIRM_CLEAR.equals(message),
                             "Please take the message: %s", CONFIRM_CLEAR);
-            manager.dropGraph(name);
+            manager.dropGraph(name, true);
             return ImmutableMap.of("name", name);
         }
     }
@@ -145,7 +145,7 @@ public class GraphsAPI extends API {
                          @PathParam("name") String name,
                          String configText) {
         LOG.debug("Create graph {} with config options '{}'", name, configText);
-        HugeGraph graph = manager.createGraph(name, configText);
+        HugeGraph graph = manager.createGraph(name, configText, true);
         return ImmutableMap.of("name", graph.name(),
                                "backend", graph.backend());
     }

@@ -135,6 +135,22 @@ public class ServerOptions extends OptionHolder {
                     2 * CoreOptions.CPUS
             );
 
+    public static final ConfigListOption<String> ETCDS =
+            new ConfigListOption<>(
+                    "etcds",
+                    "The URL of ectds.",
+                    disallowEmpty(),
+                    "http://127.0.0.1:2379"
+            );
+
+    public static final ConfigOption<String> CLUSTER =
+            new ConfigOption<>(
+                    "cluster",
+                    "The cluster name.",
+                    disallowEmpty(),
+                    "hg-test"
+            );
+
     public static final ConfigOption<String> GRAPHS =
             new ConfigOption<>(
                     "graphs",
