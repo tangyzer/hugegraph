@@ -33,7 +33,7 @@ import org.junit.Test;
 
 public class ProjectApiTest extends BaseApiTest {
 
-    private final static String path = "graphs/hugegraph/auth/projects";
+    private final static String path = "graphs/auth/projects";
 
     @Before
     public void setup() {
