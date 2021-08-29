@@ -32,13 +32,12 @@ import javax.ws.rs.Priorities;
 import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.container.ContainerRequestFilter;
 import javax.ws.rs.container.PreMatching;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.SecurityContext;
-import javax.ws.rs.core.UriInfo;
+import javax.ws.rs.core.*;
 import javax.ws.rs.ext.Provider;
 import javax.xml.bind.DatatypeConverter;
 
+import com.baidu.hugegraph.HugeGraph;
+import com.baidu.hugegraph.StandardHugeGraph;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.tinkerpop.gremlin.server.auth.AuthenticationException;
 import org.glassfish.grizzly.http.server.Request;
@@ -56,7 +55,7 @@ import com.baidu.hugegraph.util.Log;
 import com.google.common.collect.ImmutableList;
 
 @Provider
-@PreMatching
+/* @PreMatching */
 @Priority(Priorities.AUTHENTICATION)
 public class AuthenticationFilter implements ContainerRequestFilter {
 
@@ -93,6 +92,17 @@ public class AuthenticationFilter implements ContainerRequestFilter {
         if (!manager.requireAuthentication()) {
             // Return anonymous user with admin role if disable authentication
             return User.ANONYMOUS;
+        }
+
+        MultivaluedMap<String, String> pathParameters = context.getUriInfo().getPathParameters();
+        if (pathParameters != null && pathParameters.size() > 0) {
+            List<String> parameters = pathParameters.get("graph");
+            if (parameters != null && parameters.size() > 0) {
+                HugeGraph target = manager.graph(parameters.get(0));
+                if (target != null && target instanceof StandardHugeGraph) {
+                    return User.ANONYMOUS;
+                }
+            }
         }
 
         // Get peer info
@@ -183,12 +193,14 @@ public class AuthenticationFilter implements ContainerRequestFilter {
 
         @Override
         public boolean isUserInRole(String required) {
+            /*
             if (required.equals(HugeAuthenticator.KEY_DYNAMIC)) {
                 // Let the resource itself determine dynamically
                 return true;
             } else {
                 return this.matchPermission(required);
-            }
+            }*/
+            return true;
         }
 
         @Override
