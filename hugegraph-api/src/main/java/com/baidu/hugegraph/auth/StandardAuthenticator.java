@@ -78,7 +78,9 @@ public class StandardAuthenticator implements HugeAuthenticator {
 
     private String inputPassword() {
         String inputPrompt = "Please input the admin password:";
-        String notEmptyPrompt = "The admin password is 5-16 characters, which can be letters, numbers or special symbols";
+        String notEmptyPrompt = "The admin password is 5-16 characters, " +
+                                "which can be letters, numbers or " +
+                                "special symbols";
         Console console = System.console();
         while (true) {
             String password = "";
@@ -92,7 +94,7 @@ public class StandardAuthenticator implements HugeAuthenticator {
                 password = scanner.nextLine();
             }
             if (!password.isEmpty() &&
-                    password.matches(API.USER_PASSWORD_PATTERN)) {
+                password.matches(API.USER_PASSWORD_PATTERN)) {
                 return password;
             }
             System.out.println(notEmptyPrompt);
