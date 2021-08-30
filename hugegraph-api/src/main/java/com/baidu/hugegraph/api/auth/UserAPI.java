@@ -212,13 +212,13 @@ public class UserAPI extends API {
             E.checkArgument(!StringUtils.isEmpty(this.name) &&
                             this.name.matches(USER_NAME_PATTERN),
                             "The name is 5-16 characters " +
-                                    "and can only contain letters, " +
-                                    "numbers or underscores");
+                            "and can only contain letters, " +
+                            "numbers or underscores");
             E.checkArgument(!StringUtils.isEmpty(this.password) &&
                             this.password.matches(USER_PASSWORD_PATTERN),
                             "The password is 5-16 characters, " +
-                                    "which can be letters, numbers or " +
-                                    "special symbols");
+                            "which can be letters, numbers or " +
+                            "special symbols");
         }
 
         @Override
