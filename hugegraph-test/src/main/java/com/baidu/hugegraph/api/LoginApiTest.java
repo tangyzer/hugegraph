@@ -44,7 +44,7 @@ public class LoginApiTest extends BaseApiTest {
 
     @Before
     public void setup() {
-        Response r = this.createUser("test", "test");
+        Response r = this.createUser("test1", "test1");
         Map<String, Object> user = r.readEntity(
                                      new GenericType<Map<String, Object>>(){});
         this.userId4Test = (String) user.get("id");
@@ -59,14 +59,14 @@ public class LoginApiTest extends BaseApiTest {
     public void testLogin() {
         Response r;
 
-        r = this.login("test", "test");
+        r = this.login("test1", "test1");
         String result = assertResponseStatus(200, r);
         assertJsonContains(result, "token");
 
-        r = this.login("test", "pass");
+        r = this.login("test1", "pass1");
         assertResponseStatus(401, r);
 
-        r = this.login("pass", "pass");
+        r = this.login("pass1", "pass1");
         assertResponseStatus(401, r);
     }
 
@@ -75,7 +75,7 @@ public class LoginApiTest extends BaseApiTest {
         Response r;
         String result;
 
-        r = this.login("test", "test");
+        r = this.login("test1", "test1");
         result = assertResponseStatus(200, r);
         assertJsonContains(result, "token");
 
@@ -99,7 +99,7 @@ public class LoginApiTest extends BaseApiTest {
         Response r;
         String result;
 
-        r = this.login("test", "test");
+        r = this.login("test1", "test1");
         result = assertResponseStatus(200, r);
         assertJsonContains(result, "token");
 
