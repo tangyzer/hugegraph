@@ -68,6 +68,10 @@ public class AuthenticationFilter implements ContainerRequestFilter {
             "versions"
     );
 
+    private static final List<String> ANONYMOUS_API_LIST = ImmutableList.of(
+            "metrics/backend"
+    );
+
     @Context
     private javax.inject.Provider<GraphManager> managerProvider;
 
@@ -93,12 +97,19 @@ public class AuthenticationFilter implements ContainerRequestFilter {
             return User.ANONYMOUS;
         }
 
-        MultivaluedMap<String, String> pathParameters = context.getUriInfo().getPathParameters();
+        if (AuthenticationFilter.isAnonymousAPI(context)) {
+            // Return anonymous user if access anonymous api
+            return User.ANONYMOUS;
+        }
+
+        MultivaluedMap<String, String> pathParameters =
+                                context.getUriInfo().getPathParameters();
         if (pathParameters != null && pathParameters.size() > 0) {
             List<String> parameters = pathParameters.get("graph");
             if (parameters != null && parameters.size() > 0) {
                 HugeGraph target = manager.graph(parameters.get(0));
                 if (target != null && target instanceof StandardHugeGraph) {
+                    // Return anonymous user if access standard hugeGraph
                     return User.ANONYMOUS;
                 }
             }
@@ -192,15 +203,12 @@ public class AuthenticationFilter implements ContainerRequestFilter {
 
         @Override
         public boolean isUserInRole(String required) {
-            /*
             if (required.equals(HugeAuthenticator.KEY_DYNAMIC)) {
                 // Let the resource itself determine dynamically
                 return true;
             } else {
                 return this.matchPermission(required);
-            }*/
-            // Let the resource itself determine dynamically, merely temporary.
-            return true;
+            }
         }
 
         @Override
@@ -298,6 +306,20 @@ public class AuthenticationFilter implements ContainerRequestFilter {
 
         for (String whiteApi : WHITE_API_LIST) {
             if (path.endsWith(whiteApi)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean isAnonymousAPI(ContainerRequestContext context) {
+        String path = context.getUriInfo().getPath();
+
+        E.checkArgument(StringUtils.isNotEmpty(path),
+                        "Invalid request uri '%s'", path);
+
+        for (String anonymousApi : ANONYMOUS_API_LIST) {
+            if (path.endsWith(anonymousApi)) {
                 return true;
             }
         }

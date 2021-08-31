@@ -87,7 +87,7 @@ public class GremlinApiTest extends BaseApiTest {
     public void testClearAndInit() {
         String body = "{"
                 + "\"gremlin\":\""
-                + "def auth = hugegraph.hugegraph().authManager();"
+                + "def auth = system.hugegraph().authManager();"
                 + "def admin = auth.findUser('admin');"
                 + "hugegraph.clearBackend();"
                 + "hugegraph.initBackend();"
