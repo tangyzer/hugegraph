@@ -91,6 +91,7 @@ public class GremlinApiTest extends BaseApiTest {
                 + "def admin = auth.findUser('admin');"
                 + "hugegraph.clearBackend();"
                 + "hugegraph.initBackend();"
+                + "\","
                 + "\"bindings\":{},"
                 + "\"language\":\"gremlin-groovy\","
                 + "\"aliases\":{\"g\":\"__g_hugegraph\"}}";
