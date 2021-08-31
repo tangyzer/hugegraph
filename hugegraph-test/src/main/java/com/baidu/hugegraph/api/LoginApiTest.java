@@ -118,7 +118,7 @@ public class LoginApiTest extends BaseApiTest {
                                    result,
                                    new TypeReference<Map<String, Object>>(){});
         Assert.assertEquals(this.userId4Test, user.get("user_id"));
-        Assert.assertEquals("test", user.get("user_name"));
+        Assert.assertEquals("test1", user.get("user_name"));
 
         String invalidToken = "eyJhbGciOiJIUzI1NiJ9.eyJ1caVyX25hbWUiOiJ0ZXN0IiwidXNlcl9pZCI6Ii02Mzp0ZXN0IiwiZXhwIjoxNjI0MzUzMjUyfQ.kYot-3mSGlfSbEMzxrTs84q8YanhTTxtsKPPG25CNxA";
         headers = new MultivaluedHashMap<>();
