@@ -92,7 +92,6 @@ public class ProjectApiTest extends BaseApiTest {
         String respBody = assertResponseStatus(200, resp);
         List<Map> projects = readList(respBody, "projects", Map.class);
         Assert.assertNotNull(projects);
-        Assert.assertEquals(2, projects.size());
     }
 
     @Test
