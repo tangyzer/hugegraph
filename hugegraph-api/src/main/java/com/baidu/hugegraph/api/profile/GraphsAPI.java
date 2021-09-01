@@ -19,7 +19,6 @@
 
 package com.baidu.hugegraph.api.profile;
 
-import java.io.File;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -30,7 +29,6 @@ import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.ForbiddenException;
 import javax.ws.rs.GET;
-import javax.ws.rs.NotSupportedException;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
@@ -52,6 +50,7 @@ import com.baidu.hugegraph.core.GraphManager;
 import com.baidu.hugegraph.server.RestServer;
 import com.baidu.hugegraph.type.define.GraphMode;
 import com.baidu.hugegraph.type.define.GraphReadMode;
+import com.baidu.hugegraph.util.ConfigUtil;
 import com.baidu.hugegraph.util.E;
 import com.baidu.hugegraph.util.JsonUtil;
 import com.baidu.hugegraph.util.Log;
@@ -155,19 +154,14 @@ public class GraphsAPI extends API {
     @Path("{name}/conf")
     @Produces(APPLICATION_JSON_WITH_CHARSET)
     @RolesAllowed("admin")
-    public File getConf(@Context GraphManager manager,
+    public String getConf(@Context GraphManager manager,
                         @PathParam("name") String name) {
         LOG.debug("Get graph configuration by name '{}'", name);
 
         HugeGraph g = graph4admin(manager, name);
 
         HugeConfig config = (HugeConfig) g.configuration();
-        File file = config.getFile();
-        if (file == null) {
-            throw new NotSupportedException("Can't access the api in " +
-                      "a node which started with non local file config.");
-        }
-        return file;
+        return ConfigUtil.writeConfigToString(config);
     }
 
     @DELETE

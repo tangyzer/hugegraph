@@ -23,14 +23,18 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.Writer;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+
+import javax.ws.rs.NotSupportedException;
 
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.tree.ConfigurationNode;
 import org.apache.commons.io.Charsets;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.output.StringBuilderWriter;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.tinkerpop.gremlin.util.config.YamlConfiguration;
 import org.slf4j.Logger;
@@ -100,6 +104,28 @@ public final class ConfigUtil {
             throw new HugeException("Failed to write HugeConfig to file {}",
                                     e, fileName);
         }
+    }
+
+    public static String writeConfigToString(HugeConfig config) {
+        String content;
+        try {
+            if (config.getFileName() == null) {
+                Writer writer = new StringBuilderWriter();
+                config.save(writer);
+                content = writer.toString();
+            } else {
+                File file = config.getFile();
+                if (file == null) {
+                    throw new NotSupportedException(
+                              "Can't access the api in a node which started " +
+                              "with non local file config.");
+                }
+                content = FileUtils.readFileToString(file);
+            }
+        } catch (ConfigurationException | IOException e) {
+            throw new HugeException("Failed to read config of graph", e);
+        }
+        return content;
     }
 
     public static void deleteFile(File file) {
