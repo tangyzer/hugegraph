@@ -19,17 +19,13 @@
 
 package com.baidu.hugegraph.job;
 
-import com.baidu.hugegraph.computer.driver.DefaultJobState;
-import com.baidu.hugegraph.computer.driver.JobObserver;
 import com.baidu.hugegraph.computer.driver.JobStatus;
-import com.baidu.hugegraph.config.CoreOptions;
 import com.baidu.hugegraph.job.computer.Computer;
 import com.baidu.hugegraph.job.computer.ComputerPool;
 import com.baidu.hugegraph.k8s.K8sDriverProxy;
 import com.baidu.hugegraph.util.E;
 import com.baidu.hugegraph.util.JsonUtil;
 import com.baidu.hugegraph.util.Log;
-import org.mockito.Mockito;
 import org.slf4j.Logger;
 
 import javax.json.Json;
@@ -37,17 +33,10 @@ import javax.json.JsonObject;
 import java.io.StringReader;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public class ComputerDisJob extends SysJob<Object> {
 
     private static final Logger LOG = Log.logger(ComputerDisJob.class);
-
-    private ExecutorService executorService =
-                            Executors.newSingleThreadExecutor();
-    CompletableFuture<Void> future = null;
 
     public static final String COMPUTER = "computer-proxy";
 
@@ -68,10 +57,6 @@ public class ComputerDisJob extends SysJob<Object> {
     @Override
     protected void cancelled() {
         super.cancelled();
-        if (future != null) {
-            future.getNow(null);
-            executorService.shutdown();
-        }
 
         String input = this.task().input();
         E.checkArgumentNotNull(input, "The input can't be null");
@@ -121,22 +106,18 @@ public class ComputerDisJob extends SysJob<Object> {
         @SuppressWarnings("unchecked")
         Map<String, Object> parameters = (Map<String, Object>) value;
         String computer = map.get("computer").toString();
+        String graph = map.get("graph").toString();
+        String token = map.get("token").toString();
         String workerInstances = parameters.get("worker_instances") == null ?
                "1" : parameters.get("worker_instances").toString();
-        String transportServerPort =
-               parameters.get("transport_server_port") == null ? "0" :
-               parameters.get("transport_server_port").toString();
-        String rpcServerPort = parameters.get("rpc_server_port") == null ?
-               "0" : parameters.get("rpc_server_port").toString();
         String internalAlgorithm =
                parameters.get("internal_algorithm").toString();
         String paramsClass = parameters.get("params_class").toString();
         Map<String, String> params = new HashMap<>();
-        params.put("computer", computer);
+        params.put("hugegraph.name", graph);
+        params.put("hugegraph.token", token);
         params.put("k8s.worker_instances", workerInstances);
-        params.put("transport.server_port", transportServerPort);
-        params.put("rpc.server_port", rpcServerPort);
-        if (status == null || !status.equals("0")) {
+        if (status == null) {
             // TODO: DO TASK
             K8sDriverProxy k8sDriverProxy =
                            new K8sDriverProxy(workerInstances,
@@ -145,31 +126,27 @@ public class ComputerDisJob extends SysJob<Object> {
             if (jobId == null) {
                 jobId = k8sDriverProxy.getKubernetesDriver()
                                       .submitJob(computer, params);
+                map = JsonUtil.fromJson(this.task().input(), Map.class);
                 map.put("inner.job_id", jobId);
                 this.task().input(JsonUtil.toJson(map));
             }
 
-            JobObserver jobObserver = Mockito.mock(JobObserver.class);
-            String finalJobId = jobId;
-            future = CompletableFuture.runAsync(() -> {
-                k8sDriverProxy.getKubernetesDriver()
-                              .waitJob(finalJobId, params, jobObserver);
-            }, executorService);
-
-            DefaultJobState jobState = new DefaultJobState();
-            jobState.jobStatus(JobStatus.INITIALIZING);
-            Mockito.verify(jobObserver, Mockito.timeout(15000L).atLeast(1))
-                   .onJobStateChanged(Mockito.eq(jobState));
-
-            DefaultJobState jobState2 = new DefaultJobState();
-            jobState2.jobStatus(JobStatus.SUCCEEDED);
-            Mockito.verify(jobObserver, Mockito.timeout(15000L).atLeast(1))
-                   .onJobStateChanged(Mockito.eq(jobState2));
-
-            future.getNow(null);
+            k8sDriverProxy.getKubernetesDriver()
+                          .waitJob(jobId, params, observer -> {
+                JobStatus jobStatus = observer.jobStatus();
+                Map<String, Object> innerMap = JsonUtil.fromJson(
+                                    this.task().input(), Map.class);
+                innerMap.put("inner.status", jobStatus);
+                this.task().input(JsonUtil.toJson(innerMap));
+            });
             k8sDriverProxy.close();
         }
 
+        map = JsonUtil.fromJson(this.task().input(), Map.class);
+        status = map.get("inner.status").toString();
+        E.checkArgument(status != null
+                        && status.equals("SUCCEEDED"),
+                        "K8s task failed '%s'", status);
         return 0;
     }
 }

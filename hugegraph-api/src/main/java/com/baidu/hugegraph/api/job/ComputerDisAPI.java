@@ -70,10 +70,12 @@ public class ComputerDisAPI extends API {
                         "The computer name can't be empty");
         E.checkArgument(parameters != null,
                         "The parameters can't be empty");
+
         String token = manager.authManager().createToken("");
-        Map<String, Object> input = ImmutableMap.of("computer", computer,
+        Map<String, Object> input = ImmutableMap.of("graph", graph,
+                                                    "computer", computer,
                                                     "parameters", parameters,
-                                                    "inner.status", "1");
+                                                    "token", token);
         HugeGraph g = graph(manager, graph);
         JobBuilder<Object> builder = JobBuilder.of(g);
         builder.name("computer-proxy:" + computer)
@@ -131,6 +133,27 @@ public class ComputerDisAPI extends API {
         return ImmutableMap.of("task_id", taskId, "message", "success");
     }
 
+    @PUT
+    @Timed
+    @Path("/update/{jobId}")
+    @Status(Status.ACCEPTED)
+    @Consumes(APPLICATION_JSON)
+    @Produces(APPLICATION_JSON_WITH_CHARSET)
+    public Map<String, Object> update(@Context GraphManager manager,
+                                      @PathParam("graph") String graph,
+                                      @PathParam("jobId") String jobId) {
+        LOG.debug("Graph [{}] cancel computer job: {}", graph, jobId);
+        E.checkArgument(K8sDriverProxy.isK8sApiEnabled() == true,
+                        "The k8s api is not enable.");
+        E.checkArgument(jobId != null && !jobId.isEmpty(),
+                        "The computer name can't be empty");
+
+        TaskScheduler scheduler = graph(manager, graph).taskScheduler();
+        // TODO: SET TASK STATUS
+
+        return ImmutableMap.of("message", "success");
+    }
+
     @GET
     @Timed
     @Path("/{taskId}")
@@ -174,7 +197,7 @@ public class ComputerDisAPI extends API {
 
             Map<String, Object> map = JsonUtil.fromJson(input, Map.class);
             if (map.containsKey("inner.job_id")) {
-                tasks.add(iter.next().asMap(false));
+                tasks.add(hugeTask.asMap(false));
             }
         }
         if (limit != NO_LIMIT && tasks.size() > limit) {
@@ -193,8 +216,8 @@ public class ComputerDisAPI extends API {
             return TaskStatus.valueOf(status);
         } catch (Exception e) {
             throw new IllegalArgumentException(String.format(
-                    "Status value must be in %s, but got '%s'",
-                    Arrays.asList(TaskStatus.values()), status));
+                      "Status value must be in %s, but got '%s'",
+                      Arrays.asList(TaskStatus.values()), status));
         }
     }
 }

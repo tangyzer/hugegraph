@@ -88,10 +88,7 @@ public class K8sDriverProxyCoreTest extends BaseCoreTest {
     @Test
     public void testK8sTask() throws TimeoutException {
         Map<String, String> params = new HashMap<>();
-        params.put("computer", COMPUTER);
         params.put("k8s.worker_instances", "2");
-        params.put("transport.server_port", "0");
-        params.put("rpc.server_port", "0");
         K8sDriverProxy k8sDriverProxy = new K8sDriverProxy("2",
                                                             INTERNAL_ALGORITHM,
                                                             PARAMS_CLASS);
