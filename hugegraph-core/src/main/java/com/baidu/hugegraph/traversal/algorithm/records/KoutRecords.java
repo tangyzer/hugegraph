@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Stack;
 
 import com.baidu.hugegraph.backend.id.Id;
+import com.baidu.hugegraph.traversal.algorithm.HugeTraverser;
 import com.baidu.hugegraph.traversal.algorithm.HugeTraverser.PathSet;
 import com.baidu.hugegraph.traversal.algorithm.records.record.IntIterator;
 import com.baidu.hugegraph.traversal.algorithm.records.record.Record;
@@ -34,9 +35,23 @@ import com.baidu.hugegraph.util.collection.CollectionFactory;
 
 public class KoutRecords extends SingleWayMultiPathsRecords {
 
+    // Non-zero depth is used for deepFirst traverse mode.
+    // In such case, startOneLayer/finishOneLayer should not be called,
+    // instead, we should use addFullPath
+    private final int depth;
+
     public KoutRecords(RecordType type, boolean concurrent,
-                       Id source, boolean nearest) {
+                       Id source, boolean nearest, int depth) {
         super(type, concurrent, source, nearest);
+
+        this.depth = depth;
+
+        for(int i = 0; i < depth; i++){
+            this.records().push(this.newRecord());
+        }
+        assert(this.records().size() == (depth + 1));
+        // top most layer
+        this.currentRecord(this.records().peek());
     }
 
     @Override
@@ -61,5 +76,24 @@ public class KoutRecords extends SingleWayMultiPathsRecords {
             paths.add(this.getPath(records.size() - 1, iterator.next()));
         }
         return paths;
+    }
+
+    public void addFullPath(HugeTraverser.Path path) {
+        this.addFullPath(path.vertices());
+    }
+
+    public void addFullPath(List<Id> vertices) {
+        assert (depth + 1 == vertices.size());
+        assert (records().size() == vertices.size());
+
+        int sourceCode = this.code(vertices.get(0));
+        int targetCode;
+        Record record;
+        for (int i = 1; i < vertices.size(); i++) {
+            targetCode = this.code(vertices.get(i));
+            record = this.records().elementAt(i);
+            this.addPathToRecord(sourceCode, targetCode, record);
+            sourceCode = targetCode;
+        }
     }
 }

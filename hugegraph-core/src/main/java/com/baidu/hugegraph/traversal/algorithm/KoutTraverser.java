@@ -54,9 +54,9 @@ public class KoutTraverser extends OltpTraverser {
         if (capacity != NO_LIMIT) {
             // Capacity must > limit because sourceV is counted in capacity
             E.checkArgument(capacity >= limit && limit != NO_LIMIT,
-                            "Capacity can't be less than limit, " +
+                    "Capacity can't be less than limit, " +
                             "but got capacity '%s' and limit '%s'",
-                            capacity, limit);
+                    capacity, limit);
         }
 
         Id labelId = this.getEdgeLabelId(label);
@@ -68,20 +68,20 @@ public class KoutTraverser extends OltpTraverser {
         all.add(sourceV);
 
         long remaining = capacity == NO_LIMIT ?
-                         NO_LIMIT : capacity - latest.size();
+                NO_LIMIT : capacity - latest.size();
         while (depth-- > 0) {
             // Just get limit nodes in last layer if limit < remaining capacity
             if (depth == 0 && limit != NO_LIMIT &&
-                (limit < remaining || remaining == NO_LIMIT)) {
+                    (limit < remaining || remaining == NO_LIMIT)) {
                 remaining = limit;
             }
             if (nearest) {
                 latest = this.adjacentVertices(sourceV, latest, dir, labelId,
-                                               all, degree, remaining);
+                        all, degree, remaining);
                 all.addAll(latest);
             } else {
                 latest = this.adjacentVertices(sourceV, latest, dir, labelId,
-                                               null, degree, remaining);
+                        null, degree, remaining);
             }
             if (capacity != NO_LIMIT) {
                 // Update 'remaining' value to record remaining capacity
@@ -89,8 +89,8 @@ public class KoutTraverser extends OltpTraverser {
 
                 if (remaining <= 0 && depth > 0) {
                     throw new HugeException(
-                              "Reach capacity '%s' while remaining depth '%s'",
-                              capacity, depth);
+                            "Reach capacity '%s' while remaining depth '%s'",
+                            capacity, depth);
                 }
             }
         }
@@ -111,7 +111,7 @@ public class KoutTraverser extends OltpTraverser {
         boolean concurrent = maxDepth >= this.concurrentDepth();
 
         KoutRecords records = new KoutRecords(RecordType.INT, concurrent,
-                                              source, nearest);
+                source, nearest, 0);
 
         Consumer<Id> consumer = v -> {
             if (this.reachLimit(limit, depth[0], records.size())) {
@@ -119,7 +119,7 @@ public class KoutTraverser extends OltpTraverser {
             }
             Iterator<Edge> edges = edgesOfVertex(v, step);
             while (!this.reachLimit(limit, depth[0], records.size()) &&
-                   edges.hasNext()) {
+                    edges.hasNext()) {
                 Id target = ((HugeEdge) edges.next()).id().otherVertexId();
                 records.addPath(v, target);
                 this.checkCapacity(capacity, records.accessed(), depth[0]);
@@ -134,14 +134,47 @@ public class KoutTraverser extends OltpTraverser {
         return records;
     }
 
+    public KoutRecords deepFirstKout(Id sourceV, EdgeStep step,
+                                     int depth, boolean nearest, long capacity, long limit) {
+        E.checkNotNull(sourceV, "source vertex id");
+        this.checkVertexExist(sourceV, "source vertex");
+        checkPositive(depth, "k-out max_depth");
+        checkCapacity(capacity);
+        checkLimit(limit);
+
+        Set<Id> all = newIdSet();
+        all.add(sourceV);
+
+        KoutRecords records = new KoutRecords(RecordType.INT, false,
+                sourceV, nearest, depth);
+
+        Iterator<Edge> it = this.createNestedIterator(sourceV, step, depth, all);
+
+        Set<Id> latest = newIdSet();
+        while (it.hasNext()) {
+            this.edgeIterCounter++;
+            HugeEdge e = (HugeEdge) it.next();
+            Id target = e.id().otherVertexId();
+            if(!nearest || !all.contains(target)) {
+                latest.add(target);
+                records.addFullPath(HugeTraverser.createPath(sourceV, it, target));
+            }
+
+            if (limit != NO_LIMIT && latest.size() >= limit ||
+                    capacity != NO_LIMIT && all.size() > capacity)
+                break;
+        }
+        return records;
+    }
+
     private void checkCapacity(long capacity, long accessed, long depth) {
         if (capacity == NO_LIMIT) {
             return;
         }
         if (accessed >= capacity && depth > 0) {
             throw new HugeException(
-                      "Reach capacity '%s' while remaining depth '%s'",
-                      capacity, depth);
+                    "Reach capacity '%s' while remaining depth '%s'",
+                    capacity, depth);
         }
     }
 

@@ -20,6 +20,7 @@
 package com.baidu.hugegraph.serializer;
 
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
@@ -51,6 +52,7 @@ import com.baidu.hugegraph.traversal.optimize.TraversalUtil;
 import com.baidu.hugegraph.util.JsonUtil;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import org.checkerframework.checker.units.qual.A;
 
 public class JsonSerializer implements Serializer {
 
@@ -58,11 +60,22 @@ public class JsonSerializer implements Serializer {
 
     private static JsonSerializer INSTANCE = new JsonSerializer();
 
+    private Map<String, Object> debugMeasure = null;
+    private static String MEASURE_KEY = "measure";
+
     private JsonSerializer() {
     }
 
     public static JsonSerializer instance() {
         return INSTANCE;
+    }
+
+    private JsonSerializer(Map<String, Object> debugMeasure) {
+        this.debugMeasure = debugMeasure;
+    }
+
+    public static JsonSerializer instance(Map<String, Object> debugMatrix) {
+        return new JsonSerializer(debugMatrix);
     }
 
     @Override
@@ -72,14 +85,13 @@ public class JsonSerializer implements Serializer {
 
     @Override
     public String writeList(String label, Collection<?> list) {
-        try (ByteArrayOutputStream out = new ByteArrayOutputStream(LBUF_SIZE)) {
-            out.write(String.format("{\"%s\": ", label).getBytes(API.CHARSET));
-            out.write(JsonUtil.toJson(list).getBytes(API.CHARSET));
-            out.write("}".getBytes(API.CHARSET));
-            return out.toString(API.CHARSET);
-        } catch (Exception e) {
-            throw new HugeException("Failed to serialize %s", e, label);
+        Map<String, Object> results;
+        if (this.debugMeasure != null) {
+            results = ImmutableMap.of(label, list, MEASURE_KEY, this.debugMeasure);
+        } else {
+            results = ImmutableMap.of(label, list);
         }
+        return JsonUtil.toJson(results);
     }
 
     private String writeIterator(String label, Iterator<?> iter,
@@ -319,8 +331,14 @@ public class JsonSerializer implements Serializer {
         }
 
         Map<String, Object> results;
-        results = ImmutableMap.of(name, nodes, "size", size,
-                                  "paths", pathList, "vertices", vertices);
+        if (this.debugMeasure != null) {
+            results = ImmutableMap.of(name, nodes, "size", size,
+                    "paths", pathList, "vertices", vertices,
+                    MEASURE_KEY, this.debugMeasure);
+        } else {
+            results = ImmutableMap.of(name, nodes, "size", size,
+                    "paths", pathList, "vertices", vertices);
+        }
         return JsonUtil.toJson(results);
     }
 }

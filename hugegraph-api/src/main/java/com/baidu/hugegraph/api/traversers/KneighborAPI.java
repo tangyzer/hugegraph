@@ -85,6 +85,7 @@ public class KneighborAPI extends TraverserAPI {
                   "max degree '{}' and limit '{}'",
                   graph, sourceV, direction, edgeLabel, depth,
                   maxDegree, limit);
+        DebugMeasure measure = new DebugMeasure();
 
         Id source = VertexAPI.checkAndParseVertexId(sourceV);
         Directions dir = Directions.convert(EdgeAPI.parseDirection(direction));
@@ -95,8 +96,9 @@ public class KneighborAPI extends TraverserAPI {
         try (KneighborTraverser traverser = new KneighborTraverser(g)) {
             ids = traverser.kneighbor(source, dir, edgeLabel,
                                       depth, maxDegree, limit);
+            measure.addIterCount(1+traverser.vertexIterCounter, traverser.edgeIterCounter);
         }
-        return manager.serializer(g).writeList("vertices", ids);
+        return manager.serializer(g, measure.getResult()).writeList("vertices", ids);
     }
 
     @POST
@@ -106,6 +108,8 @@ public class KneighborAPI extends TraverserAPI {
     public String post(@Context GraphManager manager,
                        @PathParam("graph") String graph,
                        Request request) {
+        DebugMeasure measure = new DebugMeasure();
+
         E.checkArgumentNotNull(request, "The request body can't be null");
         E.checkArgumentNotNull(request.source,
                                "The source of request can't be null");
@@ -132,6 +136,7 @@ public class KneighborAPI extends TraverserAPI {
             results = traverser.customizedKneighbor(sourceId, step,
                                                     request.maxDepth,
                                                     request.limit);
+            measure.addIterCount(1+traverser.vertexIterCounter, traverser.edgeIterCounter);
         }
 
         long size = results.size();
@@ -155,10 +160,11 @@ public class KneighborAPI extends TraverserAPI {
             }
             if (!ids.isEmpty()) {
                 iter = g.vertices(ids.toArray());
+                measure.addIterCount(ids.size(), 0);
             }
         }
-        return manager.serializer(g).writeNodesWithPath("kneighbor", neighbors,
-                                                        size, paths, iter);
+        return manager.serializer(g, measure.getResult())
+                .writeNodesWithPath("kneighbor", neighbors, size, paths, iter);
     }
 
     private static class Request {

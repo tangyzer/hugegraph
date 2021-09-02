@@ -54,7 +54,6 @@ public abstract class SingleWayMultiPathsRecords extends AbstractRecords {
     public SingleWayMultiPathsRecords(RecordType type, boolean concurrent,
                                       Id source, boolean nearest) {
         super(type, concurrent);
-
         this.nearest = nearest;
 
         this.sourceCode = this.code(source);
@@ -64,7 +63,7 @@ public abstract class SingleWayMultiPathsRecords extends AbstractRecords {
         this.records.push(firstRecord);
 
         this.accessedVertices = concurrent ? new IntHashSet().asSynchronized() :
-                                new IntHashSet();
+                new IntHashSet();
     }
 
     @Override
@@ -112,15 +111,16 @@ public abstract class SingleWayMultiPathsRecords extends AbstractRecords {
 
     @Watched
     public void addPath(Id source, Id target) {
-        int sourceCode = this.code(source);
-        int targetCode = this.code(target);
+        this.addPathToRecord(this.code(source), this.code(target), this.currentRecord());
+    }
+
+    protected void addPathToRecord(int sourceCode, int targetCode, Record record) {
         if (this.nearest && this.accessedVertices.contains(targetCode) ||
-            !this.nearest && this.currentRecord().containsKey(targetCode) ||
-            targetCode == this.sourceCode) {
+                !this.nearest && this.currentRecord().containsKey(targetCode) ||
+                targetCode == this.sourceCode) {
             return;
         }
-        this.currentRecord().addPath(targetCode, sourceCode);
-
+        record.addPath(targetCode, sourceCode);
         this.accessedVertices.add(targetCode);
     }
 

@@ -24,6 +24,7 @@ import java.util.Map;
 
 import javax.ws.rs.core.Response;
 
+import com.baidu.hugegraph.util.JsonUtil;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -54,22 +55,33 @@ public class KoutApiTest extends BaseApiTest {
         String rippleId = name2Ids.get("ripple");
         // Test for nearest=true
         Response r = client().get(path, ImmutableMap.of("source",
-                                                        id2Json(markoId),
-                                                        "max_depth", 2));
+                id2Json(markoId),
+                "max_depth", 2));
         String content = assertResponseStatus(200, r);
         List<String> vertices = assertJsonContains(content, "vertices");
         Assert.assertEquals(1, vertices.size());
         Assert.assertTrue(vertices.contains(joshId));
         // Test for nearest=false
         r = client().get(path, ImmutableMap.of("source", id2Json(markoId),
-                                               "max_depth", 2,
-                                               "nearest", "false"));
+                "max_depth", 2,
+                "nearest", "false"));
         content = assertResponseStatus(200, r);
         vertices = assertJsonContains(content, "vertices");
         Assert.assertEquals(3, vertices.size());
         Assert.assertTrue(vertices.containsAll(ImmutableList.of(peterId,
-                                                                rippleId,
-                                                                joshId)));
+                rippleId,
+                joshId)));
+        // Test for algorithm
+        r = client().get(path, ImmutableMap.of("source", id2Json(markoId),
+                "max_depth", 2,
+                "nearest", "false",
+                "algorithm", "deep_first"));
+        content = assertResponseStatus(200, r);
+        vertices = assertJsonContains(content, "vertices");
+        Assert.assertEquals(3, vertices.size());
+        Assert.assertTrue(vertices.containsAll(ImmutableList.of(peterId,
+                rippleId,
+                joshId)));
     }
 
     @Test
@@ -77,20 +89,21 @@ public class KoutApiTest extends BaseApiTest {
         Map<String, String> name2Ids = listAllVertexName2Ids();
         String markoId = name2Ids.get("marko");
         String reqBody = String.format("{ " +
-                                       "\"source\": \"%s\", " +
-                                       "\"step\": { " +
-                                       " \"direction\": \"BOTH\", " +
-                                       " \"labels\": [\"knows\", " +
-                                       " \"created\"], " +
-                                       "\"properties\": { " +
-                                       " \"weight\": \"P.gt(0.1)\"}, " +
-                                       " \"degree\": 10000, " +
-                                       " \"skip_degree\": 100000}, " +
-                                       "\"max_depth\": 1, " +
-                                       "\"nearest\": true, " +
-                                       "\"limit\": 10000, " +
-                                       "\"with_vertex\": true, " +
-                                       "\"with_path\": true}", markoId);
+                "\"source\": \"%s\", " +
+                "\"step\": { " +
+                " \"direction\": \"BOTH\", " +
+                " \"labels\": [\"knows\", " +
+                " \"created\"], " +
+                "\"properties\": { " +
+                " \"weight\": \"P.gt(0.1)\"}, " +
+                " \"degree\": 10000, " +
+                " \"skip_degree\": 100000}, " +
+                "\"max_depth\": 1, " +
+                "\"nearest\": true, " +
+                "\"limit\": 10000, " +
+                "\"with_vertex\": true, " +
+                "\"with_path\": true, " +
+                "\"algorithm\": \"deep_first\" }", markoId);
         Response resp = client().post(path, reqBody);
         String content = assertResponseStatus(200, resp);
         Object size = assertJsonContains(content, "size");

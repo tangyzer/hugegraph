@@ -23,10 +23,7 @@ import static com.baidu.hugegraph.traversal.algorithm.HugeTraverser.DEFAULT_CAPA
 import static com.baidu.hugegraph.traversal.algorithm.HugeTraverser.DEFAULT_ELEMENTS_LIMIT;
 import static com.baidu.hugegraph.traversal.algorithm.HugeTraverser.DEFAULT_MAX_DEGREE;
 
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 import javax.inject.Singleton;
 import javax.ws.rs.Consumes;
@@ -39,6 +36,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 
+import com.google.common.collect.ImmutableMap;
 import org.apache.tinkerpop.gremlin.structure.Vertex;
 import org.slf4j.Logger;
 
@@ -78,30 +76,47 @@ public class KoutAPI extends TraverserAPI {
                       @QueryParam("label") String edgeLabel,
                       @QueryParam("max_depth") int depth,
                       @QueryParam("nearest")
-                      @DefaultValue("true")  boolean nearest,
+                      @DefaultValue("true") boolean nearest,
                       @QueryParam("max_degree")
                       @DefaultValue(DEFAULT_MAX_DEGREE) long maxDegree,
                       @QueryParam("capacity")
                       @DefaultValue(DEFAULT_CAPACITY) long capacity,
+                      @QueryParam("algorithm")
+                      @DefaultValue(HugeTraverser.ALGORITHMS_BREADTH_FIRST) String algorithm,
                       @QueryParam("limit")
                       @DefaultValue(DEFAULT_ELEMENTS_LIMIT) long limit) {
         LOG.debug("Graph [{}] get k-out from '{}' with " +
-                  "direction '{}', edge label '{}', max depth '{}', nearest " +
-                  "'{}', max degree '{}', capacity '{}' and limit '{}'",
-                  graph, source, direction, edgeLabel, depth, nearest,
-                  maxDegree, capacity, limit);
+                        "direction '{}', edge label '{}', max depth '{}', nearest " +
+                        "'{}', max degree '{}', capacity '{}', limit '{}' and algorithm '{}'",
+                graph, source, direction, edgeLabel, depth, nearest,
+                maxDegree, capacity, limit, algorithm);
+
+        HugeTraverser.checkAlgorithm(algorithm);
+        DebugMeasure measure = new DebugMeasure();
 
         Id sourceId = VertexAPI.checkAndParseVertexId(source);
         Directions dir = Directions.convert(EdgeAPI.parseDirection(direction));
 
         HugeGraph g = graph(manager, graph);
 
-        Set<Id> ids;
+        Collection<Id> ids;
         try (KoutTraverser traverser = new KoutTraverser(g)) {
-            ids = traverser.kout(sourceId, dir, edgeLabel, depth,
-                                 nearest, maxDegree, capacity, limit);
+            if (HugeTraverser.isDeepFirstAlgorithm(algorithm)) {
+                List<String> lables = new ArrayList<>();
+                if (edgeLabel != null) {
+                    lables.add(edgeLabel);
+                }
+                EdgeStep edgeStep = new EdgeStep(g, dir, lables, ImmutableMap.of(), maxDegree, 0);
+                KoutRecords results = traverser.deepFirstKout(sourceId, edgeStep,
+                        depth, nearest, capacity, limit);
+                ids = results.ids(limit);
+            } else {
+                ids = traverser.kout(sourceId, dir, edgeLabel, depth,
+                        nearest, maxDegree, capacity, limit);
+            }
+            measure.addIterCount(1 + traverser.vertexIterCounter, traverser.edgeIterCounter);
         }
-        return manager.serializer(g).writeList("vertices", ids);
+        return manager.serializer(g, measure.getResult()).writeList("vertices", ids);
     }
 
     @POST
@@ -111,23 +126,27 @@ public class KoutAPI extends TraverserAPI {
     public String post(@Context GraphManager manager,
                        @PathParam("graph") String graph,
                        Request request) {
+        DebugMeasure measure = new DebugMeasure();
+
         E.checkArgumentNotNull(request, "The request body can't be null");
         E.checkArgumentNotNull(request.source,
-                               "The source of request can't be null");
+                "The source of request can't be null");
         E.checkArgument(request.step != null,
-                        "The steps of request can't be null");
+                "The steps of request can't be null");
         if (request.countOnly) {
             E.checkArgument(!request.withVertex && !request.withPath,
-                            "Can't return vertex or path when count only");
+                    "Can't return vertex or path when count only");
         }
+        HugeTraverser.checkAlgorithm(request.algorithm);
 
         LOG.debug("Graph [{}] get customized kout from source vertex '{}', " +
-                  "with step '{}', max_depth '{}', nearest '{}', " +
-                  "count_only '{}', capacity '{}', limit '{}', " +
-                  "with_vertex '{}' and with_path '{}'",
-                  graph, request.source, request.step, request.maxDepth,
-                  request.nearest, request.countOnly, request.capacity,
-                  request.limit, request.withVertex, request.withPath);
+                        "with step '{}', max_depth '{}', nearest '{}', " +
+                        "count_only '{}', capacity '{}', limit '{}', " +
+                        "with_vertex '{}', with_path '{}', with_edge '{}' and algorithm '{}'",
+                graph, request.source, request.step, request.maxDepth,
+                request.nearest, request.countOnly, request.capacity,
+                request.limit, request.withVertex, request.withPath,
+                request.withEdge, request.algorithm);
 
         HugeGraph g = graph(manager, graph);
         Id sourceId = HugeVertex.getIdValue(request.source);
@@ -136,11 +155,20 @@ public class KoutAPI extends TraverserAPI {
 
         KoutRecords results;
         try (KoutTraverser traverser = new KoutTraverser(g)) {
-            results = traverser.customizedKout(sourceId, step,
-                                               request.maxDepth,
-                                               request.nearest,
-                                               request.capacity,
-                                               request.limit);
+            if (HugeTraverser.isDeepFirstAlgorithm(request.algorithm)) {
+                results = traverser.deepFirstKout(sourceId, step,
+                        request.maxDepth,
+                        request.nearest,
+                        request.capacity,
+                        request.limit);
+            } else {
+                results = traverser.customizedKout(sourceId, step,
+                        request.maxDepth,
+                        request.nearest,
+                        request.capacity,
+                        request.limit);
+            }
+            measure.addIterCount(1 + traverser.vertexIterCounter, traverser.edgeIterCounter);
         }
 
         long size = results.size();
@@ -148,7 +176,7 @@ public class KoutAPI extends TraverserAPI {
             size = request.limit;
         }
         List<Id> neighbors = request.countOnly ?
-                             ImmutableList.of() : results.ids(request.limit);
+                ImmutableList.of() : results.ids(request.limit);
 
         HugeTraverser.PathSet paths = new HugeTraverser.PathSet();
         if (request.withPath) {
@@ -164,10 +192,11 @@ public class KoutAPI extends TraverserAPI {
             }
             if (!ids.isEmpty()) {
                 iter = g.vertices(ids.toArray());
+                measure.addIterCount(ids.size(), 0);
             }
         }
-        return manager.serializer(g).writeNodesWithPath("kout", neighbors,
-                                                        size, paths, iter);
+        return manager.serializer(g, measure.getResult())
+                .writeNodesWithPath("kout", neighbors, size, paths, iter);
     }
 
     private static class Request {
@@ -190,15 +219,20 @@ public class KoutAPI extends TraverserAPI {
         public boolean withVertex = false;
         @JsonProperty("with_path")
         public boolean withPath = false;
+        @JsonProperty("with_edge")
+        public boolean withEdge = false;
+        @JsonProperty("algorithm")
+        public String algorithm = HugeTraverser.ALGORITHMS_BREADTH_FIRST;
 
         @Override
         public String toString() {
             return String.format("KoutRequest{source=%s,step=%s,maxDepth=%s" +
-                                 "nearest=%s,countOnly=%s,capacity=%s," +
-                                 "limit=%s,withVertex=%s,withPath=%s}",
-                                 this.source, this.step, this.maxDepth,
-                                 this.nearest, this.countOnly, this.capacity,
-                                 this.limit, this.withVertex, this.withPath);
+                            "nearest=%s,countOnly=%s,capacity=%s," +
+                            "limit=%s,withVertex=%s,withPath=%s,withEdge=%s,algorithm=%s}",
+                    this.source, this.step, this.maxDepth,
+                    this.nearest, this.countOnly, this.capacity,
+                    this.limit, this.withVertex, this.withPath,
+                    this.withEdge, this.algorithm);
         }
     }
 }

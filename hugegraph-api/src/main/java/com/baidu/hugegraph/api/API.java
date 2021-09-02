@@ -20,6 +20,8 @@
 package com.baidu.hugegraph.api;
 
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
@@ -45,15 +47,54 @@ import com.google.common.collect.ImmutableMap;
 
 public class API {
 
+    public static class DebugMeasure {
+        public static final String EDGE_ITER = "edge_iters";
+        public static final String VERTICE_ITER = "vertice_iters";
+        public static final String COST = "cost";
+
+        protected long timeStart = System.currentTimeMillis();
+        protected HashMap<String, Object> mapResult = new LinkedHashMap<>();
+
+        public Map<String, Object> getResult() {
+            mapResult.put(COST, System.currentTimeMillis() - timeStart);
+            return mapResult;
+        }
+
+        public void put(String key, String value) {
+            this.mapResult.put(key, value);
+        }
+
+        public void put(String key, long value) {
+            this.mapResult.put(key, value);
+        }
+
+        public void put(String key, int value) {
+            this.mapResult.put(key, value);
+        }
+
+        protected void addCount(String key, long value) {
+            long cur = 0;
+            if (this.mapResult.containsKey(key)) {
+                cur = (long) this.mapResult.get(key);
+            }
+            this.mapResult.put(key, cur + value);
+        }
+
+        public void addIterCount(long verticeIters, long edgeIters) {
+            this.addCount(EDGE_ITER, edgeIters);
+            this.addCount(VERTICE_ITER, verticeIters);
+        }
+    }
+
     private static final Logger LOG = Log.logger(RestServer.class);
 
     public static final String CHARSET = "UTF-8";
 
     public static final String APPLICATION_JSON = MediaType.APPLICATION_JSON;
     public static final String APPLICATION_JSON_WITH_CHARSET =
-                               APPLICATION_JSON + ";charset=" + CHARSET;
+            APPLICATION_JSON + ";charset=" + CHARSET;
     public static final String JSON = MediaType.APPLICATION_JSON_TYPE
-                                               .getSubtype();
+            .getSubtype();
 
     public static final String ACTION_APPEND = "append";
     public static final String ACTION_ELIMINATE = "eliminate";
@@ -64,13 +105,13 @@ public class API {
            "[a-zA-Z0-9~!@#$%^&*()_+|<>,.?/:;'`\"\\[\\]{}\\\\]{5,16}";
 
     private static final Meter succeedMeter =
-                         MetricsUtil.registerMeter(API.class, "commit-succeed");
+            MetricsUtil.registerMeter(API.class, "commit-succeed");
     private static final Meter illegalArgErrorMeter =
-                         MetricsUtil.registerMeter(API.class, "illegal-arg");
+            MetricsUtil.registerMeter(API.class, "illegal-arg");
     private static final Meter expectedErrorMeter =
-                         MetricsUtil.registerMeter(API.class, "expected-error");
+            MetricsUtil.registerMeter(API.class, "expected-error");
     private static final Meter unknownErrorMeter =
-                         MetricsUtil.registerMeter(API.class, "unknown-error");
+            MetricsUtil.registerMeter(API.class, "unknown-error");
 
     public static final String SYSTEM_GRAPH = "system";
 
@@ -78,7 +119,7 @@ public class API {
         HugeGraph g = manager.graph(graph);
         if (g == null) {
             throw new NotFoundException(String.format(
-                      "Graph '%s' does not exist",  graph));
+                    "Graph '%s' does not exist", graph));
         }
         return g;
     }
@@ -105,7 +146,7 @@ public class API {
             succeedMeter.mark();
             return result;
         } catch (IllegalArgumentException | NotFoundException |
-                 ForbiddenException e) {
+                ForbiddenException e) {
             illegalArgErrorMeter.mark();
             rollback.accept(null);
             throw e;
@@ -149,21 +190,21 @@ public class API {
     }
 
     protected static void checkCreatingBody(
-                          Collection<? extends Checkable> bodys) {
+            Collection<? extends Checkable> bodys) {
         E.checkArgumentNotNull(bodys, "The request body can't be empty");
         for (Checkable body : bodys) {
             E.checkArgument(body != null,
-                            "The batch body can't contain null record");
+                    "The batch body can't contain null record");
             body.checkCreate(true);
         }
     }
 
     protected static void checkUpdatingBody(
-                          Collection<? extends Checkable> bodys) {
+            Collection<? extends Checkable> bodys) {
         E.checkArgumentNotNull(bodys, "The request body can't be empty");
         for (Checkable body : bodys) {
             E.checkArgumentNotNull(body,
-                                   "The batch body can't contain null record");
+                    "The batch body can't contain null record");
             body.checkUpdate();
         }
     }
@@ -177,11 +218,12 @@ public class API {
         Map<String, Object> props = null;
         try {
             props = JsonUtil.fromJson(properties, Map.class);
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
 
         // If properties is the string "null", props will be null
         E.checkArgument(props != null,
-                        "Invalid request with properties: %s", properties);
+                "Invalid request with properties: %s", properties);
         return props;
     }
 
@@ -193,7 +235,7 @@ public class API {
             return false;
         } else {
             throw new NotSupportedException(
-                      String.format("Not support action '%s'", action));
+                    String.format("Not support action '%s'", action));
         }
     }
 }
