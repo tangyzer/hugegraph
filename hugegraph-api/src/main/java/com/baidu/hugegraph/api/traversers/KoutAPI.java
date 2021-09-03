@@ -37,6 +37,7 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 
 import com.google.common.collect.ImmutableMap;
+import org.apache.tinkerpop.gremlin.structure.Edge;
 import org.apache.tinkerpop.gremlin.structure.Vertex;
 import org.slf4j.Logger;
 
@@ -108,7 +109,7 @@ public class KoutAPI extends TraverserAPI {
                 }
                 EdgeStep edgeStep = new EdgeStep(g, dir, lables, ImmutableMap.of(), maxDegree, 0);
                 KoutRecords results = traverser.deepFirstKout(sourceId, edgeStep,
-                        depth, nearest, capacity, limit);
+                        depth, nearest, capacity, limit, false);
                 ids = results.ids(limit);
             } else {
                 ids = traverser.kout(sourceId, dir, edgeLabel, depth,
@@ -160,13 +161,15 @@ public class KoutAPI extends TraverserAPI {
                         request.maxDepth,
                         request.nearest,
                         request.capacity,
-                        request.limit);
+                        request.limit,
+                        request.withEdge);
             } else {
                 results = traverser.customizedKout(sourceId, step,
                         request.maxDepth,
                         request.nearest,
                         request.capacity,
-                        request.limit);
+                        request.limit,
+                        request.withEdge);
             }
             measure.addIterCount(1 + traverser.vertexIterCounter, traverser.edgeIterCounter);
         }
@@ -182,7 +185,8 @@ public class KoutAPI extends TraverserAPI {
         if (request.withPath) {
             paths.addAll(results.paths(request.limit));
         }
-        Iterator<Vertex> iter = QueryResults.emptyIterator();
+        Iterator<Vertex> iterVertex = QueryResults.emptyIterator();
+        Iterator<Edge> iterEdge = QueryResults.emptyIterator();
         if (request.withVertex && !request.countOnly) {
             Set<Id> ids = new HashSet<>(neighbors);
             if (request.withPath) {
@@ -191,12 +195,25 @@ public class KoutAPI extends TraverserAPI {
                 }
             }
             if (!ids.isEmpty()) {
-                iter = g.vertices(ids.toArray());
+                iterVertex = g.vertices(ids.toArray());
                 measure.addIterCount(ids.size(), 0);
             }
         }
+        if (request.withEdge) {
+            Iterator<Edge> iter = results.getEdges();
+            if (iter == null) {
+                Set<Id> ids = results.getEdgeIds();
+                if (!ids.isEmpty()) {
+                    iter = g.edges(ids.toArray());
+                    measure.addIterCount(0, ids.size());
+                }
+            }
+            if (iter != null) {
+                iterEdge = iter;
+            }
+        }
         return manager.serializer(g, measure.getResult())
-                .writeNodesWithPath("kout", neighbors, size, paths, iter);
+                .writeNodesWithPath("kout", neighbors, size, paths, iterVertex, iterEdge);
     }
 
     private static class Request {

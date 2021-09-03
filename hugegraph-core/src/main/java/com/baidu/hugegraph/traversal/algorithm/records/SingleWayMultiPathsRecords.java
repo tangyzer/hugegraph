@@ -19,13 +19,12 @@
 
 package com.baidu.hugegraph.traversal.algorithm.records;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Stack;
+import java.util.*;
 import java.util.function.Function;
 
+import com.baidu.hugegraph.backend.id.EdgeId;
+import com.baidu.hugegraph.structure.HugeEdge;
+import org.apache.tinkerpop.gremlin.structure.Edge;
 import org.eclipse.collections.api.set.primitive.MutableIntSet;
 import org.eclipse.collections.impl.map.mutable.primitive.IntIntHashMap;
 import org.eclipse.collections.impl.set.mutable.primitive.IntHashSet;
@@ -50,6 +49,10 @@ public abstract class SingleWayMultiPathsRecords extends AbstractRecords {
     private final MutableIntSet accessedVertices;
 
     private IntIterator lastRecordKeys;
+
+    // collection of edges
+    private HashSet<Id> edgeIds = new HashSet<>();
+    private final ArrayList<Edge> edges = new ArrayList<>();
 
     public SingleWayMultiPathsRecords(RecordType type, boolean concurrent,
                                       Id source, boolean nearest) {
@@ -126,51 +129,87 @@ public abstract class SingleWayMultiPathsRecords extends AbstractRecords {
 
     public abstract int size();
 
-    public Path getPath(int target) {
-        List<Id> ids = new ArrayList<>();
-        for (int i = 0; i < this.records.size(); i++) {
-            IntIntHashMap layer = ((Int2IntRecord) this.records
-                                  .elementAt(i)).layer();
-            if (!layer.containsKey(target)) {
-                continue;
-            }
-
-            ids.add(this.id(target));
-            int parent = layer.get(target);
-            ids.add(this.id(parent));
-            i--;
-            for (; i > 0; i--) {
-                layer = ((Int2IntRecord) this.records.elementAt(i)).layer();
-                parent = layer.get(parent);
-                ids.add(this.id(parent));
-            }
-            break;
-        }
-        return new Path(ids);
+    public Path getPath(int layerIndex, int target) {
+        List<Integer> ids = getPathCodes(layerIndex, target);
+        return this.codesToPath(ids);
     }
 
-    public Path getPath(int layerIndex, int target) {
-        List<Id> ids = new ArrayList<>();
+    public List<Integer> getPathCodes(int layerIndex, int target) {
+        List<Integer> ids = new ArrayList<>();
         IntIntHashMap layer = ((Int2IntRecord) this.records
-                              .elementAt(layerIndex)).layer();
+                .elementAt(layerIndex)).layer();
         if (!layer.containsKey(target)) {
             throw new HugeException("Failed to get path for %s",
-                                    this.id(target));
+                    this.id(target));
         }
-        ids.add(this.id(target));
+        ids.add(target);
         int parent = layer.get(target);
-        ids.add(this.id(parent));
+        ids.add(parent);
         layerIndex--;
         for (; layerIndex > 0; layerIndex--) {
             layer = ((Int2IntRecord) this.records.elementAt(layerIndex)).layer();
             parent = layer.get(parent);
-            ids.add(this.id(parent));
+            ids.add(parent);
         }
         Collections.reverse(ids);
+        return ids;
+    }
+
+    public Path codesToPath(List<Integer> codes) {
+        ArrayList<Id> ids = new ArrayList<>();
+        for ( int code : codes) {
+            ids.add(this.id(code));
+        }
         return new Path(ids);
     }
 
     public Stack<Record> records() {
         return this.records;
+    }
+
+    public void addEdge(HugeEdge edge) {
+        if( !edgeIds.contains(edge.id())) {
+            this.edgeIds.add(edge.id());
+            this.edges.add(edge);
+        }
+    }
+
+    // for breadth-first only
+    public void addEdgeId(Id edgeId) {
+        this.edgeIds.add(edgeId);
+    }
+
+    public Iterator<Edge> getEdges() {
+        if (this.edges.size() == 0)
+            return null;
+        return this.edges.iterator();
+    }
+
+    public Set<Id> getEdgeIds() {
+        return this.edgeIds;
+    }
+
+    protected static Long makeCodePair(int source, int target) {
+        return ((long) source & 0xFFFFFFFFl) | (((long) target << 32) & 0xFFFFFFFF00000000l);
+    }
+
+    protected void addEdgeToCodePair(HashSet<Long> codePairs, int layerIndex, int target) {
+        List<Integer> codes = this.getPathCodes(layerIndex, target);
+        for (int i = 1; i < codes.size(); i++) {
+            codePairs.add(makeCodePair(codes.get(i - 1), codes.get(i)));
+        }
+    }
+
+    protected void filterEdges(HashSet<Long> codePairs) {
+        HashSet<Id> edgeIds = this.edgeIds;
+        this.edgeIds = new HashSet<>();
+        for (Id id : edgeIds) {
+            EdgeId edgeId = (EdgeId) id;
+            Long pair = makeCodePair(this.code(edgeId.ownerVertexId()), this.code(edgeId.otherVertexId()));
+            if (codePairs.contains(pair)) {
+                // need edge
+                this.edgeIds.add(id);
+            }
+        }
     }
 }

@@ -737,11 +737,12 @@ public class HugeTraverser {
         // visited vertex-ids of all parent-tree, used to exclude visited vertex or other purpose
         private final Set<Id> visited;
 
-        // cache for parent vertex id
-        private final ArrayList<Id> cache = new ArrayList<>();
+        // cache for edges
+        private final ArrayList<HugeEdge> cache = new ArrayList<>();
 
+        // of parent
+        private HugeEdge currentEdge = null;
         private Iterator<Edge> currentIterator = null;
-        private Id currentVertex = null;
 
         // todo: may add edge-filter and/or vertice-filter ...
 
@@ -773,7 +774,7 @@ public class HugeTraverser {
                     traverser.edgeIterCounter++;
                     Id vid = e.id().otherVertexId();
                     if (!visited.contains(vid)) {
-                        this.cache.add(vid);
+                        this.cache.add(e);
                         if (visited.size() < MAX_VISITED_COUNT) {
                             // skip over limit visited vertices.
                             this.visited.add(vid);
@@ -784,19 +785,19 @@ public class HugeTraverser {
             if (this.cache.size() == 0) {
                 return false;
             }
-            this.currentVertex = this.cache.get(0);
-            this.currentIterator = traverser.edgesOfVertex(this.cache.get(0), edgeStep);
+            this.currentEdge = this.cache.get(0);
+            this.currentIterator = traverser.edgesOfVertex(this.currentEdge.id().otherVertexId(), edgeStep);
             this.cache.remove(0);
             return true;
         }
 
-        public List<Id> getPath(List<Id> path) {
+        public List<HugeEdge> getPathEdges(List<HugeEdge> edges) {
             if (parentIterator instanceof NestedIterator) {
                 NestedIterator parent = (NestedIterator) this.parentIterator;
-                parent.getPath(path);
+                parent.getPathEdges(edges);
             }
-            path.add(currentVertex);
-            return path;
+            edges.add(currentEdge);
+            return edges;
         }
     }
 
@@ -815,13 +816,12 @@ public class HugeTraverser {
         return it;
     }
 
-    public static Path createPath(Id source, Iterator<Edge> it, Id target) {
-        ArrayList<Id> vertices = new ArrayList<Id>();
-        vertices.add(source);
+    public static List<HugeEdge> getPathEdges(Iterator<Edge> it, HugeEdge edge) {
+        ArrayList<HugeEdge> edges = new ArrayList<>();
         if (it instanceof NestedIterator) {
-            ((NestedIterator) it).getPath(vertices);
+            ((NestedIterator) it).getPathEdges(edges);
         }
-        vertices.add(target);
-        return new Path(vertices);
+        edges.add(edge);
+        return edges;
     }
 }

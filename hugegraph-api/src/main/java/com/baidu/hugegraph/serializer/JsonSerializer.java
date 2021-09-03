@@ -20,12 +20,7 @@
 package com.baidu.hugegraph.serializer;
 
 import java.io.ByteArrayOutputStream;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal;
 import org.apache.tinkerpop.gremlin.structure.Edge;
@@ -52,16 +47,15 @@ import com.baidu.hugegraph.traversal.optimize.TraversalUtil;
 import com.baidu.hugegraph.util.JsonUtil;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import org.checkerframework.checker.units.qual.A;
 
 public class JsonSerializer implements Serializer {
 
     private static final int LBUF_SIZE = 1024;
 
-    private static JsonSerializer INSTANCE = new JsonSerializer();
+    private static final JsonSerializer INSTANCE = new JsonSerializer();
 
     private Map<String, Object> debugMeasure = null;
-    private static String MEASURE_KEY = "measure";
+    private static final String MEASURE_KEY = "measure";
 
     private JsonSerializer() {
     }
@@ -126,7 +120,7 @@ public class JsonSerializer implements Serializer {
                     page = PageInfo.pageInfo(iter);
                 } else {
                     throw new HugeException("Invalid paging iterator: %s",
-                                            iter.getClass());
+                            iter.getClass());
                 }
                 if (page != null) {
                     page = String.format(",\"page\": \"%s\"", page);
@@ -158,10 +152,10 @@ public class JsonSerializer implements Serializer {
 
     @Override
     public String writeTaskWithSchema(
-                  SchemaElement.TaskWithSchema taskWithSchema) {
+            SchemaElement.TaskWithSchema taskWithSchema) {
         StringBuilder builder = new StringBuilder();
         long id = taskWithSchema.task() == null ?
-                  0L : taskWithSchema.task().asLong();
+                0L : taskWithSchema.task().asLong();
         SchemaElement schemaElement = taskWithSchema.schemaElement();
         String type;
         String schema;
@@ -173,13 +167,13 @@ public class JsonSerializer implements Serializer {
             schema = this.writeIndexlabel((IndexLabel) schemaElement);
         } else {
             throw new HugeException("Invalid schema element '%s' in " +
-                                    "TaskWithSchema, only support " +
-                                    "[PropertyKey, IndexLabel]", schemaElement);
+                    "TaskWithSchema, only support " +
+                    "[PropertyKey, IndexLabel]", schemaElement);
         }
         return builder.append("{\"").append(type).append("\": ")
-                      .append(schema)
-                      .append(", \"task_id\": ").append(id).append("}")
-                      .toString();
+                .append(schema)
+                .append(", \"task_id\": ").append(id).append("}")
+                .toString();
     }
 
     @Override
@@ -290,8 +284,8 @@ public class JsonSerializer implements Serializer {
             pathList = ImmutableList.of();
         }
         results = ImmutableMap.of("crosspoints", paths.crosspoints(),
-                                  "paths", pathList,
-                                  "vertices", iterator);
+                "paths", pathList,
+                "vertices", iterator);
         return JsonUtil.toJson(results);
     }
 
@@ -299,46 +293,47 @@ public class JsonSerializer implements Serializer {
     public String writeSimilars(SimilarsMap similars,
                                 Iterator<Vertex> vertices) {
         return JsonUtil.toJson(ImmutableMap.of("similars", similars.toMap(),
-                                               "vertices", vertices));
+                "vertices", vertices));
     }
 
     @Override
     public String writeWeightedPath(NodeWithWeight path,
                                     Iterator<Vertex> vertices) {
         Map<String, Object> pathMap = path == null ?
-                                      ImmutableMap.of() : path.toMap();
+                ImmutableMap.of() : path.toMap();
         return JsonUtil.toJson(ImmutableMap.of("path", pathMap,
-                                               "vertices", vertices));
+                "vertices", vertices));
     }
 
     @Override
     public String writeWeightedPaths(WeightedPaths paths,
                                      Iterator<Vertex> vertices) {
         Map<Id, Map<String, Object>> pathMap = paths == null ?
-                                               ImmutableMap.of() :
-                                               paths.toMap();
+                ImmutableMap.of() : paths.toMap();
         return JsonUtil.toJson(ImmutableMap.of("paths", pathMap,
-                                               "vertices", vertices));
+                "vertices", vertices));
     }
 
     @Override
     public String writeNodesWithPath(String name, List<Id> nodes, long size,
                                      Collection<HugeTraverser.Path> paths,
-                                     Iterator<Vertex> vertices) {
+                                     Iterator<Vertex> vertices,
+                                     Iterator<Edge> edges) {
         List<Map<String, Object>> pathList = new ArrayList<>();
         for (HugeTraverser.Path path : paths) {
             pathList.add(path.toMap(false));
         }
 
-        Map<String, Object> results;
+        ImmutableMap.Builder<Object, Object> build = ImmutableMap.builder()
+                .put(name, nodes)
+                .put("size", size)
+                .put("paths", pathList)
+                .put("vertices", vertices)
+                .put("edges", edges);
+
         if (this.debugMeasure != null) {
-            results = ImmutableMap.of(name, nodes, "size", size,
-                    "paths", pathList, "vertices", vertices,
-                    MEASURE_KEY, this.debugMeasure);
-        } else {
-            results = ImmutableMap.of(name, nodes, "size", size,
-                    "paths", pathList, "vertices", vertices);
+            build.put(MEASURE_KEY, this.debugMeasure);
         }
-        return JsonUtil.toJson(results);
+        return JsonUtil.toJson(build.build());
     }
 }
