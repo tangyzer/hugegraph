@@ -199,7 +199,7 @@ public class KoutAPI extends TraverserAPI {
                 measure.addIterCount(ids.size(), 0);
             }
         }
-        if (request.withEdge) {
+        if (request.withEdge && !request.countOnly) {
             Iterator<Edge> iter = results.getEdges();
             if (iter == null) {
                 Set<Id> ids = results.getEdgeIds();
