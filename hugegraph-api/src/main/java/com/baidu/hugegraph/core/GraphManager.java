@@ -206,33 +206,6 @@ public final class GraphManager {
         });
     }
 
-    public HugeGraph cloneGraph(String name, String newName,
-                                String configText) {
-        /*
-         * 0. check and modify params
-         * 1. create graph instance
-         * 2. init backend store
-         * 3. inject graph and traversal source into gremlin server context
-         * 4. inject graph into rest server context
-         */
-        HugeGraph g = this.graph(name);
-        E.checkArgumentNotNull(g, "The origin graph '%s' doesn't exist", name);
-        E.checkArgumentNotNull(newName, "The graph name can't be null");
-        E.checkArgument(!this.graphs().contains(newName),
-                        "The graph '%s' has existed", newName);
-        PropertiesConfiguration propConfig = this.buildConfig(configText);
-
-        HugeConfig config = (HugeConfig) g.configuration();
-        HugeConfig cloneConfig = (HugeConfig) config.clone();
-        cloneConfig.setDelimiterParsingDisabled(true);
-        // Use the passed config to overwrite the old one
-        propConfig.getKeys().forEachRemaining(key -> {
-            cloneConfig.setProperty(key, propConfig.getProperty(key));
-        });
-        this.checkOptions(cloneConfig);
-        return this.createGraph(cloneConfig, true);
-    }
-
     private void listenEtcdGraphAdd(WatchResponse response) {
         for (WatchEvent event : response.getEvents()) {
             // Skip if not etcd PUT event
