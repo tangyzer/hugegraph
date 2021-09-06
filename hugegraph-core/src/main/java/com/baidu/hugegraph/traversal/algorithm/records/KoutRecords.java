@@ -21,7 +21,9 @@ package com.baidu.hugegraph.traversal.algorithm.records;
 
 import static com.baidu.hugegraph.backend.query.Query.NO_LIMIT;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Stack;
 
 import com.baidu.hugegraph.backend.id.Id;
 import com.baidu.hugegraph.structure.HugeEdge;

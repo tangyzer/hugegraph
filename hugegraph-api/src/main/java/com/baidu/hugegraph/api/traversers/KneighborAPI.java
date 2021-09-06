@@ -82,10 +82,10 @@ public class KneighborAPI extends TraverserAPI {
                       @QueryParam("limit")
                       @DefaultValue(DEFAULT_ELEMENTS_LIMIT) long limit) {
         LOG.debug("Graph [{}] get k-neighbor from '{}' with " +
-                        "direction '{}', edge label '{}', max depth '{}', " +
-                        "max degree '{}' and limit '{}'",
-                graph, sourceV, direction, edgeLabel, depth,
-                maxDegree, limit);
+                  "direction '{}', edge label '{}', max depth '{}', " +
+                  "max degree '{}' and limit '{}'",
+                  graph, sourceV, direction, edgeLabel, depth,
+                  maxDegree, limit);
         DebugMeasure measure = new DebugMeasure();
 
         Id source = VertexAPI.checkAndParseVertexId(sourceV);
@@ -96,10 +96,12 @@ public class KneighborAPI extends TraverserAPI {
         Set<Id> ids;
         try (KneighborTraverser traverser = new KneighborTraverser(g)) {
             ids = traverser.kneighbor(source, dir, edgeLabel,
-                    depth, maxDegree, limit);
-            measure.addIterCount(1 + traverser.vertexIterCounter, traverser.edgeIterCounter);
+                                      depth, maxDegree, limit);
+            measure.addIterCount(1 + traverser.vertexIterCounter,
+                                 traverser.edgeIterCounter);
         }
-        return manager.serializer(g, measure.getResult()).writeList("vertices", ids);
+        return manager.serializer(g, measure.getResult())
+                      .writeList("vertices", ids);
     }
 
     @POST
@@ -113,19 +115,20 @@ public class KneighborAPI extends TraverserAPI {
 
         E.checkArgumentNotNull(request, "The request body can't be null");
         E.checkArgumentNotNull(request.source,
-                "The source of request can't be null");
+                               "The source of request can't be null");
         E.checkArgument(request.step != null,
-                "The steps of request can't be null");
+                        "The steps of request can't be null");
         if (request.countOnly) {
             E.checkArgument(!request.withVertex && !request.withPath,
-                    "Can't return vertex or path when count only");
+                            "Can't return vertex or path when count only");
         }
 
         LOG.debug("Graph [{}] get customized kneighbor from source vertex " +
-                        "'{}', with step '{}', limit '{}', count_only '{}', " +
-                        "with_vertex '{}', with_path '{}' and with_edge '{}'",
-                graph, request.source, request.step, request.limit,
-                request.countOnly, request.withVertex, request.withPath, request.withEdge);
+                  "'{}', with step '{}', limit '{}', count_only '{}', " +
+                  "with_vertex '{}', with_path '{}' and with_edge '{}'",
+                  graph, request.source, request.step, request.limit,
+                  request.countOnly, request.withVertex, request.withPath,
+                  request.withEdge);
 
         HugeGraph g = graph(manager, graph);
         Id sourceId = HugeVertex.getIdValue(request.source);
@@ -135,10 +138,11 @@ public class KneighborAPI extends TraverserAPI {
         KneighborRecords results;
         try (KneighborTraverser traverser = new KneighborTraverser(g)) {
             results = traverser.customizedKneighbor(sourceId, step,
-                    request.maxDepth,
-                    request.limit,
-                    request.withEdge);
-            measure.addIterCount(1 + traverser.vertexIterCounter, traverser.edgeIterCounter);
+                                                    request.maxDepth,
+                                                    request.limit,
+                                                    request.withEdge);
+            measure.addIterCount(1 + traverser.vertexIterCounter,
+                                 traverser.edgeIterCounter);
         }
 
         long size = results.size();
@@ -146,7 +150,7 @@ public class KneighborAPI extends TraverserAPI {
             size = request.limit;
         }
         List<Id> neighbors = request.countOnly ?
-                ImmutableList.of() : results.ids(request.limit);
+                             ImmutableList.of() : results.ids(request.limit);
 
         HugeTraverser.PathSet paths = new HugeTraverser.PathSet();
         if (request.withPath) {
@@ -180,7 +184,8 @@ public class KneighborAPI extends TraverserAPI {
             }
         }
         return manager.serializer(g, measure.getResult())
-                .writeNodesWithPath("kneighbor", neighbors, size, paths, iterVertice, iterEdge);
+                      .writeNodesWithPath("kneighbor", neighbors, size,
+                                          paths, iterVertice, iterEdge);
     }
 
     private static class Request {
@@ -205,10 +210,11 @@ public class KneighborAPI extends TraverserAPI {
         @Override
         public String toString() {
             return String.format("PathRequest{source=%s,step=%s,maxDepth=%s" +
-                            "limit=%s,countOnly=%s,withVertex=%s," +
-                            "withPath=%s,withEdge=%s}", this.source, this.step,
-                    this.maxDepth, this.limit, this.countOnly,
-                    this.withVertex, this.withPath, this.withEdge);
+                                 "limit=%s,countOnly=%s,withVertex=%s," +
+                                 "withPath=%s,withEdge=%s}", this.source,
+                                 this.step, this.maxDepth, this.limit,
+                                 this.countOnly, this.withVertex,
+                                 this.withPath, this.withEdge);
         }
     }
 }

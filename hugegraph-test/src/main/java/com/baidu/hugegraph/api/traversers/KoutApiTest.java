@@ -24,7 +24,6 @@ import java.util.Map;
 
 import javax.ws.rs.core.Response;
 
-import com.baidu.hugegraph.util.JsonUtil;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -37,22 +36,22 @@ public class KoutApiTest extends BaseApiTest {
 
     final static String path = TRAVERSERS_API + "/kout";
     final static String postParams = "{ " +
-            "\"source\": \"%s\", " +
-            "\"step\": { " +
-            " \"direction\": \"BOTH\", " +
-            " \"labels\": [\"knows\", " +
-            " \"created\"], " +
-            "\"properties\": { " +
-            " \"weight\": \"P.gt(0.1)\"}, " +
-            " \"degree\": 10000, " +
-            " \"skip_degree\": 100000}, " +
-            "\"max_depth\": 1, " +
-            "\"nearest\": true, " +
-            "\"limit\": 10000, " +
-            "\"with_vertex\": true, " +
-            "\"with_path\": true, " +
-            "\"with_edge\": true, " +
-            "\"algorithm\": \"%s\" }";
+                                     "\"source\": \"%s\", " +
+                                     "\"step\": { " +
+                                     " \"direction\": \"BOTH\", " +
+                                     " \"labels\": [\"knows\", " +
+                                     " \"created\"], " +
+                                     "\"properties\": { " +
+                                     " \"weight\": \"P.gt(0.1)\"}, " +
+                                     " \"degree\": 10000, " +
+                                     " \"skip_degree\": 100000}, " +
+                                     "\"max_depth\": 1, " +
+                                     "\"nearest\": true, " +
+                                     "\"limit\": 10000, " +
+                                     "\"with_vertex\": true, " +
+                                     "\"with_path\": true, " +
+                                     "\"with_edge\": true, " +
+                                     "\"algorithm\": \"%s\" }";
 
     @Before
     public void prepareSchema() {
@@ -72,35 +71,35 @@ public class KoutApiTest extends BaseApiTest {
         String rippleId = name2Ids.get("ripple");
         // Test for nearest=true
         Response r = client().get(path, ImmutableMap.of("source",
-                id2Json(markoId),
-                "max_depth", 2));
+                                                        id2Json(markoId),
+                                                        "max_depth", 2));
         String content = assertResponseStatus(200, r);
         List<String> vertices = assertJsonContains(content, "vertices");
         Assert.assertEquals(1, vertices.size());
         Assert.assertTrue(vertices.contains(joshId));
         // Test for nearest=false
         r = client().get(path, ImmutableMap.of("source", id2Json(markoId),
-                "max_depth", 2,
-                "nearest", "false"));
+                                               "max_depth", 2,
+                                               "nearest", "false"));
         content = assertResponseStatus(200, r);
         vertices = assertJsonContains(content, "vertices");
         assertJsonContains(content, "measure");
         Assert.assertEquals(3, vertices.size());
         Assert.assertTrue(vertices.containsAll(ImmutableList.of(peterId,
-                rippleId,
-                joshId)));
+                                                                rippleId,
+                                                                joshId)));
         // Test for algorithm
         r = client().get(path, ImmutableMap.of("source", id2Json(markoId),
-                "max_depth", 2,
-                "nearest", "false",
-                "algorithm", "deep_first"));
+                                               "max_depth", 2,
+                                               "nearest", "false",
+                                               "algorithm", "deep_first"));
         content = assertResponseStatus(200, r);
         vertices = assertJsonContains(content, "vertices");
         assertJsonContains(content, "measure");
         Assert.assertEquals(3, vertices.size());
         Assert.assertTrue(vertices.containsAll(ImmutableList.of(peterId,
-                rippleId,
-                joshId)));
+                                                                rippleId,
+                                                                joshId)));
     }
 
     @Test

@@ -19,7 +19,14 @@
 
 package com.baidu.hugegraph.traversal.algorithm;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import javax.ws.rs.core.MultivaluedHashMap;
@@ -119,15 +126,15 @@ public class HugeTraverser {
         Set<Id> neighbors = newIdSet();
         for (Id source : vertices) {
             Iterator<Edge> edges = this.edgesOfVertex(source, dir,
-                    label, degree);
+                                                      label, degree);
             while (edges.hasNext()) {
                 this.edgeIterCounter++;
                 HugeEdge e = (HugeEdge) edges.next();
                 Id target = e.id().otherVertexId();
                 boolean matchExcluded = (excluded != null &&
-                        excluded.contains(target));
+                                         excluded.contains(target));
                 if (matchExcluded || neighbors.contains(target) ||
-                        sourceV.equals(target)) {
+                    sourceV.equals(target)) {
                     continue;
                 }
                 neighbors.add(target);
@@ -198,25 +205,27 @@ public class HugeTraverser {
     protected Iterator<Edge> edgesOfVertex(Id source, EdgeStep edgeStep) {
         if (edgeStep.properties() == null || edgeStep.properties().isEmpty()) {
             Iterator<Edge> edges = this.edgesOfVertex(source,
-                    edgeStep.direction(),
-                    edgeStep.labels(),
-                    edgeStep.limit());
+                                                      edgeStep.direction(),
+                                                      edgeStep.labels(),
+                                                      edgeStep.limit());
             return edgeStep.skipSuperNodeIfNeeded(edges);
         }
         return this.edgesOfVertex(source, edgeStep, false);
     }
 
     protected Iterator<Edge> edgesOfVertexWithSK(Id source, EdgeStep edgeStep) {
-        assert edgeStep.properties() != null && !edgeStep.properties().isEmpty();
+        assert edgeStep.properties() != null &&
+               !edgeStep.properties().isEmpty();
         return this.edgesOfVertex(source, edgeStep, true);
     }
 
     private Iterator<Edge> edgesOfVertex(Id source, EdgeStep edgeStep,
                                          boolean mustAllSK) {
         Id[] edgeLabels = edgeStep.edgeLabels();
-        Query query = GraphTransaction.constructEdgesQuery(source,
-                edgeStep.direction(),
-                edgeLabels);
+        Query query = GraphTransaction.constructEdgesQuery(
+                      source,
+                      edgeStep.direction(),
+                      edgeLabels);
         ConditionQuery filter = null;
         if (mustAllSK) {
             this.fillFilterBySortKeys(query, edgeLabels, edgeStep.properties());
@@ -245,7 +254,7 @@ public class HugeTraverser {
         }
 
         E.checkArgument(edgeLabels.length == 1,
-                "The properties filter condition can be set " +
+                        "The properties filter condition can be set " +
                         "only if just set one edge label");
 
         this.fillFilterByProperties(query, properties);
@@ -255,8 +264,8 @@ public class HugeTraverser {
             Id label = condQuery.condition(HugeKeys.LABEL);
             E.checkArgument(false, "The properties %s does not match " +
                             "sort keys of edge label '%s'",
-                    this.graph().mapPkId2Name(properties.keySet()),
-                    this.graph().edgeLabel(label).name());
+                            this.graph().mapPkId2Name(properties.keySet()),
+                            this.graph().edgeLabel(label).name());
         }
     }
 
@@ -272,9 +281,10 @@ public class HugeTraverser {
 
     protected long edgesCount(Id source, EdgeStep edgeStep) {
         Id[] edgeLabels = edgeStep.edgeLabels();
-        Query query = GraphTransaction.constructEdgesQuery(source,
-                edgeStep.direction(),
-                edgeLabels);
+        Query query = GraphTransaction.constructEdgesQuery(
+                      source,
+                      edgeStep.direction(),
+                      edgeLabels);
         this.fillFilterBySortKeys(query, edgeLabels, edgeStep.properties());
         query.aggregate(Aggregate.AggregateFunc.COUNT, null);
         query.capacity(Query.NO_CAPACITY);
@@ -283,7 +293,7 @@ public class HugeTraverser {
         if (edgeStep.degree() == NO_LIMIT || count < edgeStep.degree()) {
             return count;
         } else if (edgeStep.skipDegree() != 0L &&
-                count >= edgeStep.skipDegree()) {
+                   count >= edgeStep.skipDegree()) {
             return 0L;
         } else {
             return edgeStep.degree();
@@ -309,7 +319,8 @@ public class HugeTraverser {
             this.graph.vertex(vertexId);
         } catch (NotFoundException e) {
             throw new IllegalArgumentException(String.format(
-                    "The %s with id '%s' does not exist", name, vertexId), e);
+                      "The %s with id '%s' does not exist", name, vertexId),
+                      e);
         }
     }
 
@@ -333,27 +344,27 @@ public class HugeTraverser {
 
     public static void checkPositiveOrNoLimit(long value, String name) {
         E.checkArgument(value > 0L || value == NO_LIMIT,
-                "The %s parameter must be > 0 or == %s, but got: %s",
-                name, NO_LIMIT, value);
+                        "The %s parameter must be > 0 or == %s, but got: %s",
+                        name, NO_LIMIT, value);
     }
 
     public static void checkNonNegative(long value, String name) {
         E.checkArgument(value >= 0L,
-                "The %s parameter must be >= 0, but got: %s",
-                name, value);
+                        "The %s parameter must be >= 0, but got: %s",
+                        name, value);
     }
 
     public static void checkNonNegativeOrNoLimit(long value, String name) {
         E.checkArgument(value >= 0L || value == NO_LIMIT,
-                "The %s parameter must be >= 0 or == %s, but got: %s",
-                name, NO_LIMIT, value);
+                        "The %s parameter must be >= 0 or == %s, but got: %s",
+                        name, NO_LIMIT, value);
     }
 
     public static void checkCapacity(long capacity, long access,
                                      String traverse) {
         if (capacity != NO_LIMIT && access > capacity) {
             throw new HugeException("Exceed capacity '%s' while finding %s",
-                    capacity, traverse);
+                      capacity, traverse);
         }
     }
 
@@ -361,27 +372,27 @@ public class HugeTraverser {
                                        long capacity) {
         E.checkArgument(skipDegree >= 0L &&
                         skipDegree <= Query.DEFAULT_CAPACITY,
-                "The skipped degree must be in [0, %s], but got '%s'",
-                Query.DEFAULT_CAPACITY, skipDegree);
+                        "The skipped degree must be in [0, %s], but got '%s'",
+                        Query.DEFAULT_CAPACITY, skipDegree);
         if (capacity != NO_LIMIT) {
             E.checkArgument(degree != NO_LIMIT && degree < capacity,
-                    "The max degree must be < capacity");
+                            "The max degree must be < capacity");
             E.checkArgument(skipDegree < capacity,
-                    "The skipped degree must be < capacity");
+                            "The skipped degree must be < capacity");
         }
         if (skipDegree > 0L) {
             E.checkArgument(degree != NO_LIMIT && skipDegree >= degree,
-                    "The skipped degree must be >= max degree, " +
+                            "The skipped degree must be >= max degree, " +
                             "but got skipped degree '%s' and max degree '%s'",
-                    skipDegree, degree);
+                            skipDegree, degree);
         }
     }
 
     public static void checkAlgorithm(String algorithm) {
         E.checkArgument(algorithm.compareToIgnoreCase(ALGORITHMS_BREADTH_FIRST) == 0 ||
                         algorithm.compareToIgnoreCase(ALGORITHMS_DEEP_FIRST) == 0,
-                "The algorithm must be one of '%s' or '%s', but got '%s'",
-                ALGORITHMS_BREADTH_FIRST, ALGORITHMS_DEEP_FIRST, algorithm);
+                        "The algorithm must be one of '%s' or '%s', but got '%s'",
+                        ALGORITHMS_BREADTH_FIRST, ALGORITHMS_DEEP_FIRST, algorithm);
     }
 
     public static boolean isDeepFirstAlgorithm(String algorithm) {
@@ -389,9 +400,9 @@ public class HugeTraverser {
     }
 
     public static <K, V extends Comparable<? super V>> Map<K, V> topN(
-            Map<K, V> map,
-            boolean sorted,
-            long limit) {
+                                                                 Map<K, V> map,
+                                                                 boolean sorted,
+                                                                 long limit) {
         if (sorted) {
             map = CollectionUtil.sortByValue(map, false);
         }
@@ -557,7 +568,7 @@ public class HugeTraverser {
             }
             Node other = (Node) object;
             return Objects.equals(this.id, other.id) &&
-                    Objects.equals(this.parent, other.parent);
+                   Objects.equals(this.parent, other.parent);
         }
 
         @Override
@@ -601,7 +612,7 @@ public class HugeTraverser {
         public Map<String, Object> toMap(boolean withCrossPoint) {
             if (withCrossPoint) {
                 return ImmutableMap.of("crosspoint", this.crosspoint,
-                        "objects", this.vertices);
+                                       "objects", this.vertices);
             } else {
                 return ImmutableMap.of("objects", this.vertices);
             }
@@ -734,7 +745,8 @@ public class HugeTraverser {
         private final HugeTraverser traverser;
         private final EdgeStep edgeStep;
 
-        // visited vertex-ids of all parent-tree, used to exclude visited vertex or other purpose
+        // visited vertex-ids of all parent-tree,
+        // used to exclude visited vertex or other purpose
         private final Set<Id> visited;
 
         // cache for edges
@@ -769,7 +781,8 @@ public class HugeTraverser {
         protected boolean fetch() {
             if (this.cache.size() == 0) {
                 // fill cache from parent
-                while (this.parentIterator.hasNext() && this.cache.size() < MAX_CACHED_COUNT) {
+                while (this.parentIterator.hasNext() &&
+                       this.cache.size() < MAX_CACHED_COUNT) {
                     HugeEdge e = (HugeEdge) parentIterator.next();
                     traverser.edgeIterCounter++;
                     Id vid = e.id().otherVertexId();
@@ -786,7 +799,9 @@ public class HugeTraverser {
                 return false;
             }
             this.currentEdge = this.cache.get(0);
-            this.currentIterator = traverser.edgesOfVertex(this.currentEdge.id().otherVertexId(), edgeStep);
+            this.currentIterator = traverser.edgesOfVertex(
+                                   this.currentEdge.id().otherVertexId(),
+                                   edgeStep);
             this.cache.remove(0);
             return true;
         }
@@ -804,7 +819,7 @@ public class HugeTraverser {
     public Iterator<Edge> createNestedIterator(Id sourceV, EdgeStep edgeStep,
                                                int depth, Set<Id> visited) {
         E.checkArgument(depth > 0,
-                "The depth should large than 0 for nested iterator");
+                        "The depth should large than 0 for nested iterator");
 
         visited.add(sourceV);
 
@@ -816,7 +831,8 @@ public class HugeTraverser {
         return it;
     }
 
-    public static List<HugeEdge> getPathEdges(Iterator<Edge> it, HugeEdge edge) {
+    public static List<HugeEdge> getPathEdges(Iterator<Edge> it,
+                                              HugeEdge edge) {
         ArrayList<HugeEdge> edges = new ArrayList<>();
         if (it instanceof NestedIterator) {
             ((NestedIterator) it).getPathEdges(edges);

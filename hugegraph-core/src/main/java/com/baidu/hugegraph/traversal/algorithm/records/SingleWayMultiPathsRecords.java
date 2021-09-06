@@ -19,7 +19,14 @@
 
 package com.baidu.hugegraph.traversal.algorithm.records;
 
-import java.util.*;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+import java.util.Stack;
 import java.util.function.Function;
 
 import com.baidu.hugegraph.backend.id.EdgeId;
@@ -66,7 +73,7 @@ public abstract class SingleWayMultiPathsRecords extends AbstractRecords {
         this.records.push(firstRecord);
 
         this.accessedVertices = concurrent ? new IntHashSet().asSynchronized() :
-                new IntHashSet();
+                                new IntHashSet();
     }
 
     @Override
@@ -119,8 +126,8 @@ public abstract class SingleWayMultiPathsRecords extends AbstractRecords {
 
     protected void addPathToRecord(int sourceCode, int targetCode, Record record) {
         if (this.nearest && this.accessedVertices.contains(targetCode) ||
-                !this.nearest && this.currentRecord().containsKey(targetCode) ||
-                targetCode == this.sourceCode) {
+            !this.nearest && this.currentRecord().containsKey(targetCode) ||
+            targetCode == this.sourceCode) {
             return;
         }
         record.addPath(targetCode, sourceCode);
@@ -137,17 +144,18 @@ public abstract class SingleWayMultiPathsRecords extends AbstractRecords {
     public List<Integer> getPathCodes(int layerIndex, int target) {
         List<Integer> ids = new ArrayList<>();
         IntIntHashMap layer = ((Int2IntRecord) this.records
-                .elementAt(layerIndex)).layer();
+                              .elementAt(layerIndex)).layer();
         if (!layer.containsKey(target)) {
             throw new HugeException("Failed to get path for %s",
-                    this.id(target));
+                                    this.id(target));
         }
         ids.add(target);
         int parent = layer.get(target);
         ids.add(parent);
         layerIndex--;
         for (; layerIndex > 0; layerIndex--) {
-            layer = ((Int2IntRecord) this.records.elementAt(layerIndex)).layer();
+            layer = ((Int2IntRecord) this.records
+                    .elementAt(layerIndex)).layer();
             parent = layer.get(parent);
             ids.add(parent);
         }
@@ -190,10 +198,12 @@ public abstract class SingleWayMultiPathsRecords extends AbstractRecords {
     }
 
     protected static Long makeCodePair(int source, int target) {
-        return ((long) source & 0xFFFFFFFFl) | (((long) target << 32) & 0xFFFFFFFF00000000l);
+        return ((long) source & 0xFFFFFFFFl) |
+               (((long) target << 32) & 0xFFFFFFFF00000000l);
     }
 
-    protected void addEdgeToCodePair(HashSet<Long> codePairs, int layerIndex, int target) {
+    protected void addEdgeToCodePair(HashSet<Long> codePairs,
+                                     int layerIndex, int target) {
         List<Integer> codes = this.getPathCodes(layerIndex, target);
         for (int i = 1; i < codes.size(); i++) {
             codePairs.add(makeCodePair(codes.get(i - 1), codes.get(i)));
@@ -205,7 +215,8 @@ public abstract class SingleWayMultiPathsRecords extends AbstractRecords {
         this.edgeIds = new HashSet<>();
         for (Id id : edgeIds) {
             EdgeId edgeId = (EdgeId) id;
-            Long pair = makeCodePair(this.code(edgeId.ownerVertexId()), this.code(edgeId.otherVertexId()));
+            Long pair = makeCodePair(this.code(edgeId.ownerVertexId()),
+                                     this.code(edgeId.otherVertexId()));
             if (codePairs.contains(pair)) {
                 // need edge
                 this.edgeIds.add(id);

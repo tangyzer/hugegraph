@@ -40,7 +40,7 @@ import com.baidu.hugegraph.util.Consumers;
 import jersey.repackaged.com.google.common.base.Objects;
 
 public abstract class OltpTraverser extends HugeTraverser
-        implements AutoCloseable {
+                                    implements AutoCloseable {
 
     private static final String EXECUTOR_NAME = "oltp";
     private static Consumers.ExecutorPool executors;
@@ -55,7 +55,7 @@ public abstract class OltpTraverser extends HugeTraverser
                 return;
             }
             int workers = this.graph()
-                    .option(CoreOptions.OLTP_CONCURRENT_THREADS);
+                              .option(CoreOptions.OLTP_CONCURRENT_THREADS);
             if (workers > 0) {
                 executors = new Consumers.ExecutorPool(EXECUTOR_NAME, workers);
             }
@@ -107,7 +107,7 @@ public abstract class OltpTraverser extends HugeTraverser
         }
 
         Consumers<K> consumers = new Consumers<>(executors.getExecutor(),
-                consumer, null);
+                                                 consumer, null);
         consumers.start(name);
         long total = 0L;
         try {
@@ -150,7 +150,7 @@ public abstract class OltpTraverser extends HugeTraverser
     }
 
     public class ConcurrentMultiValuedMap<K, V>
-            extends ConcurrentHashMap<K, List<V>> {
+           extends ConcurrentHashMap<K, List<V>> {
 
         private static final long serialVersionUID = -7249946839643493614L;
 

@@ -37,20 +37,20 @@ public class KneighborApiTest extends BaseApiTest {
     final static String path = TRAVERSERS_API + "/kneighbor";
 
     final static String postParams = "{ " +
-            "\"source\": \"%s\", " +
-            "\"step\": { " +
-            " \"direction\": \"BOTH\", " +
-            " \"labels\": [\"knows\", " +
-            " \"created\"], " +
-            "\"properties\": { " +
-            " \"weight\": \"P.gt(0.1)\"}, " +
-            " \"degree\": 10000, " +
-            " \"skip_degree\": 100000}, " +
-            "\"max_depth\": 2, " +
-            "\"limit\": 10000, " +
-            "\"with_vertex\": true, " +
-            "\"with_path\": true, " +
-            "\"with_edge\": true}";
+                                     "\"source\": \"%s\", " +
+                                     "\"step\": { " +
+                                     " \"direction\": \"BOTH\", " +
+                                     " \"labels\": [\"knows\", " +
+                                     " \"created\"], " +
+                                     "\"properties\": { " +
+                                     " \"weight\": \"P.gt(0.1)\"}, " +
+                                     " \"degree\": 10000, " +
+                                     " \"skip_degree\": 100000}, " +
+                                     "\"max_depth\": 2, " +
+                                     "\"limit\": 10000, " +
+                                     "\"with_vertex\": true, " +
+                                     "\"with_path\": true, " +
+                                     "\"with_edge\": true}";
 
     @Before
     public void prepareSchema() {
