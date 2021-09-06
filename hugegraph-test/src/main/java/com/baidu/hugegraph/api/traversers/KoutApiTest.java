@@ -36,6 +36,23 @@ import com.google.common.collect.ImmutableMap;
 public class KoutApiTest extends BaseApiTest {
 
     final static String path = TRAVERSERS_API + "/kout";
+    final static String postParams = "{ " +
+            "\"source\": \"%s\", " +
+            "\"step\": { " +
+            " \"direction\": \"BOTH\", " +
+            " \"labels\": [\"knows\", " +
+            " \"created\"], " +
+            "\"properties\": { " +
+            " \"weight\": \"P.gt(0.1)\"}, " +
+            " \"degree\": 10000, " +
+            " \"skip_degree\": 100000}, " +
+            "\"max_depth\": 1, " +
+            "\"nearest\": true, " +
+            "\"limit\": 10000, " +
+            "\"with_vertex\": true, " +
+            "\"with_path\": true, " +
+            "\"with_edge\": true, " +
+            "\"algorithm\": \"%s\" }";
 
     @Before
     public void prepareSchema() {
@@ -67,6 +84,7 @@ public class KoutApiTest extends BaseApiTest {
                 "nearest", "false"));
         content = assertResponseStatus(200, r);
         vertices = assertJsonContains(content, "vertices");
+        assertJsonContains(content, "measure");
         Assert.assertEquals(3, vertices.size());
         Assert.assertTrue(vertices.containsAll(ImmutableList.of(peterId,
                 rippleId,
@@ -78,6 +96,7 @@ public class KoutApiTest extends BaseApiTest {
                 "algorithm", "deep_first"));
         content = assertResponseStatus(200, r);
         vertices = assertJsonContains(content, "vertices");
+        assertJsonContains(content, "measure");
         Assert.assertEquals(3, vertices.size());
         Assert.assertTrue(vertices.containsAll(ImmutableList.of(peterId,
                 rippleId,
@@ -88,22 +107,7 @@ public class KoutApiTest extends BaseApiTest {
     public void testPost() {
         Map<String, String> name2Ids = listAllVertexName2Ids();
         String markoId = name2Ids.get("marko");
-        String reqBody = String.format("{ " +
-                "\"source\": \"%s\", " +
-                "\"step\": { " +
-                " \"direction\": \"BOTH\", " +
-                " \"labels\": [\"knows\", " +
-                " \"created\"], " +
-                "\"properties\": { " +
-                " \"weight\": \"P.gt(0.1)\"}, " +
-                " \"degree\": 10000, " +
-                " \"skip_degree\": 100000}, " +
-                "\"max_depth\": 1, " +
-                "\"nearest\": true, " +
-                "\"limit\": 10000, " +
-                "\"with_vertex\": true, " +
-                "\"with_path\": true, " +
-                "\"algorithm\": \"deep_first\" }", markoId);
+        String reqBody = String.format(postParams, markoId, "breadth_first");
         Response resp = client().post(path, reqBody);
         String content = assertResponseStatus(200, resp);
         Object size = assertJsonContains(content, "size");
@@ -111,5 +115,19 @@ public class KoutApiTest extends BaseApiTest {
         assertJsonContains(content, "kout");
         assertJsonContains(content, "paths");
         assertJsonContains(content, "vertices");
+        assertJsonContains(content, "edges");
+        assertJsonContains(content, "measure");
+
+        // for deep-first
+        reqBody = String.format(postParams, markoId, "deep_first");
+        resp = client().post(path, reqBody);
+        content = assertResponseStatus(200, resp);
+        size = assertJsonContains(content, "size");
+        Assert.assertEquals(2, size);
+        assertJsonContains(content, "kout");
+        assertJsonContains(content, "paths");
+        assertJsonContains(content, "vertices");
+        assertJsonContains(content, "edges");
+        assertJsonContains(content, "measure");
     }
 }
