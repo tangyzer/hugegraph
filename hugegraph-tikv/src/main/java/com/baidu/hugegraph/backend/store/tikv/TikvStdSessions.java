@@ -40,7 +40,7 @@ import com.baidu.hugegraph.backend.store.BackendEntry.BackendColumnIterator;
 import com.baidu.hugegraph.backend.store.BackendEntryIterator;
 import com.baidu.hugegraph.config.HugeConfig;
 import com.baidu.hugegraph.util.E;
-import com.google.protobuf.ByteString;
+import org.tikv.shade.com.google.protobuf.ByteString;
 
 public class TikvStdSessions extends TikvSessions {
 
@@ -311,9 +311,9 @@ public class TikvStdSessions extends TikvSessions {
 
         @Override
         public BackendEntry.BackendColumn next() {
-            this.position = this.iter.next().getKey();
+            this.position = this.iter.next().getKey().toByteArray();
             return BackendEntry.BackendColumn.of(this.position,
-                                                 this.iter.next().getValue());
+                                                 this.iter.next().getValue().toByteArray());
         }
 
         @Override
