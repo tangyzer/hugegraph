@@ -338,20 +338,35 @@ public class TikvStdSessions extends TikvSessions {
         }
 
         protected ByteString toTikvKey(String table) {
+            byte[] prefix = ("t" + table + "_r").getBytes();
+            byte[] actualKey = new byte[prefix.length];
+            System.arraycopy(prefix, 0, actualKey, 0, prefix.length);
+            return ByteString.copyFrom(actualKey);
+            /*
             byte[] prefix = table.getBytes();
             byte[] actualKey = new byte[prefix.length + 1];
             System.arraycopy(prefix, 0, actualKey, 0, prefix.length);
             actualKey[prefix.length] = (byte) 0xff;
             return ByteString.copyFrom(actualKey);
+
+             */
         }
 
         protected ByteString toTikvKey(String table, byte[] key) {
+            byte[] prefix = ("t" + table + "_r").getBytes();
+            byte[] actualKey = new byte[prefix.length + key.length];
+            System.arraycopy(prefix, 0, actualKey, 0, prefix.length);
+            System.arraycopy(key, 0, actualKey, prefix.length, key.length);
+            return ByteString.copyFrom(actualKey);
+            /*
             byte[] prefix = table.getBytes();
             byte[] actualKey = new byte[prefix.length + 1 + key.length];
             System.arraycopy(prefix, 0, actualKey, 0, prefix.length);
             actualKey[prefix.length] = (byte) 0xff;
             System.arraycopy(key, 0, actualKey, prefix.length + 1, key.length);
             return ByteString.copyFrom(actualKey);
+
+             */
         }
 
         private byte[] b(long value) {
@@ -457,17 +472,16 @@ public class TikvStdSessions extends TikvSessions {
         }
 
         private byte[] toActualKey(String table, ByteString tikvKey) {
+            byte[] prefix = ("t" + table + "_r").getBytes();
+            int length = tikvKey.size() - prefix.length;
+            byte[] key = new byte[length];
+            System.arraycopy(tikvKey.toByteArray(), prefix.length, key, 0, length);
             /*
-            byte[]prefix=("t"+table+"_r").getBytes();
-            intlength=tikvKey.size()-prefix.length;
-            byte[]key=newbyte[length];
-            System.arraycopy(tikvKey.toByteArray(),prefix.length,key,0,length);
-            */
-
             byte[] prefix = table.getBytes();
             int length = tikvKey.size() - prefix.length - 1;
             byte[] key = new byte[length];
-            System.arraycopy(tikvKey, prefix.length + 1, key, 0, length);
+            System.arraycopy(tikvKey.toByteArray(), prefix.length + 1, key, 0, length);
+            */
             return key;
         }
 
@@ -479,11 +493,6 @@ public class TikvStdSessions extends TikvSessions {
             }
             Kvrpcpb.KvPair next = this.iter.next();
 
-            byte[] tikvKey = next.getKey().toByteArray();
-            byte[] prefix = this.table.getBytes();
-            int length = tikvKey.length - prefix.length - 1;
-            byte[] key = new byte[length];
-            System.arraycopy(tikvKey, prefix.length + 1, key, 0, length);
             this.position = toActualKey(this.table, next.getKey());
             this.value = next.getValue().toByteArray();
 
