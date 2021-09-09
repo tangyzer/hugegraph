@@ -35,7 +35,7 @@ public class HugeRestServer {
             LOG.error(msg);
             throw new HugeException(msg);
         }
-
+        HugeRestServer.register();
         try {
             // Start HugeRestServer
             start(args[0]);

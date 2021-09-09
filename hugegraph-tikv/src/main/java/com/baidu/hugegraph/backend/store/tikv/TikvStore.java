@@ -248,6 +248,9 @@ public abstract class TikvStore extends AbstractBackendStore<Session> {
         LOG.debug("Store truncated: {}", this.store);
     }
 
+    private void enableTables() {
+    }
+
     @Override
     public void beginTx() {
         // pass
