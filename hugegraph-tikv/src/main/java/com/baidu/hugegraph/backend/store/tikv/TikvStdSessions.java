@@ -21,21 +21,14 @@ package com.baidu.hugegraph.backend.store.tikv;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.tikv.common.TiConfiguration;
 import org.tikv.common.TiSession;
+import org.tikv.common.key.Key;
 import org.tikv.kvproto.Kvrpcpb;
 import org.tikv.raw.RawKVClient;
 import org.tikv.shade.com.google.protobuf.ByteString;
@@ -51,6 +44,7 @@ import com.baidu.hugegraph.util.StringEncoding;
 public class TikvStdSessions extends TikvSessions {
 
     private final HugeConfig config;
+
     private TiSession tikvSession;
     private volatile RawKVClient tikvClient;
 
@@ -64,7 +58,7 @@ public class TikvStdSessions extends TikvSessions {
         this.config = config;
 
         TiConfiguration conf = TiConfiguration.createRawDefault(
-                               this.config.get(TikvOptions.TIKV_PDS));
+                this.config.get(TikvOptions.TIKV_PDS));
         conf.setBatchGetConcurrency(
                 this.config.get(TikvOptions.TIKV_BATCH_GET_CONCURRENCY));
         conf.setBatchPutConcurrency(
@@ -75,11 +69,8 @@ public class TikvStdSessions extends TikvSessions {
                 this.config.get(TikvOptions.TIKV_BATCH_SCAN_CONCURRENCY));
         conf.setDeleteRangeConcurrency(
                 this.config.get(TikvOptions.TIKV_DELETE_RANGE_CONCURRENCY));
-        conf.setTimeout(10000000);
-        conf.setForwardTimeout(10000000);
-        conf.setTimeout(1000000);
         this.tikvSession = TiSession.create(conf);
-        this.tikvClient = tikvSession.createRawClient();
+        this.tikvClient = this.tikvSession.createRawClient();
 
         this.tables = new ConcurrentHashMap<>();
         this.refCount = new AtomicInteger(1);
@@ -164,36 +155,6 @@ public class TikvStdSessions extends TikvSessions {
         return StringEncoding.decode(bytes);
     }
 
-    private static byte[] toActualKey(String table, ByteString tikvKey) {
-        /*
-        byte[] prefix = ("t" + table + "_r").getBytes();
-        int length = tikvKey.size() - prefix.length;
-        byte[] key = new byte[length];
-        System.arraycopy(tikvKey.toByteArray(), prefix.length, key, 0, length);
-        */
-
-        byte[] prefix = table.getBytes();
-        int length = tikvKey.size() - prefix.length - 1;
-        byte[] key = new byte[length];
-        System.arraycopy(tikvKey, prefix.length + 1, key, 0, length);
-        return key;
-    }
-
-    private static ByteString toTikvKey(String table, byte[] key) {
-        /*
-        byte[] prefix = ("t" + table + "_r").getBytes();
-        byte[] actualKey = new byte[prefix.length + key.length];
-        System.arraycopy(prefix, 0, actualKey, 0, prefix.length);
-        System.arraycopy(key, 0, actualKey, prefix.length, key.length);
-        return ByteString.copyFrom(actualKey);
-        */
-        byte[] prefix = table.getBytes();
-        byte[] actualKey = new byte[prefix.length + 1 + key.length];
-        System.arraycopy(prefix, 0, actualKey, 0, prefix.length);
-        actualKey[prefix.length] = (byte) 0xff;
-        System.arraycopy(key, 0, actualKey, prefix.length + 1, key.length);
-        return ByteString.copyFrom(actualKey);
-    }
     /**
      * StdSession implement for tikv
      */
@@ -255,12 +216,12 @@ public class TikvStdSessions extends TikvSessions {
             }
 
             if (this.putBatch.size() > 0) {
-                tikv().batchPutAtomic(this.putBatch);
+                tikv().batchPut(this.putBatch);
                 this.putBatch.clear();
             }
 
             if (this.deleteBatch.size() > 0) {
-                tikv().batchDeleteAtomic(this.deleteBatch);
+                tikv().batchDelete(this.deleteBatch);
                 this.deleteBatch.clear();
             }
 
@@ -272,7 +233,7 @@ public class TikvStdSessions extends TikvSessions {
 
             if (this.deleteRangeBatch.size() > 0) {
                 for (Map.Entry<ByteString, ByteString> entry :
-                     this.deleteRangeBatch.entrySet()) {
+                        this.deleteRangeBatch.entrySet()) {
                     tikv().deleteRange(entry.getKey(), entry.getValue());
                 }
             }
@@ -302,7 +263,7 @@ public class TikvStdSessions extends TikvSessions {
          */
         @Override
         public void put(String table, byte[] key, byte[] value) {
-            this.putBatch.put(TikvStdSessions.toTikvKey(table, key), ByteString.copyFrom(value));
+            this.putBatch.put(this.toTikvKey(table, key), ByteString.copyFrom(value));
         }
 
         @Override
@@ -313,18 +274,18 @@ public class TikvStdSessions extends TikvSessions {
                 old = this.l(oldValue);
             }
             ByteString newValue = ByteString.copyFrom(
-                                  this.b(old + this.l(value)));
-            tikv().put(TikvStdSessions.toTikvKey(table, key), newValue);
+                    this.b(old + this.l(value)));
+            tikv().put(this.toTikvKey(table, key), newValue);
         }
 
         @Override
         public void delete(String table, byte[] key) {
-            this.deleteBatch.add(TikvStdSessions.toTikvKey(table, key));
+            this.deleteBatch.add(this.toTikvKey(table, key));
         }
 
         @Override
         public void deletePrefix(String table, byte[] key) {
-            ByteString deleteKey = TikvStdSessions.toTikvKey(table, key);
+            ByteString deleteKey = this.toTikvKey(table, key);
             this.deletePrefixBatch.add(deleteKey);
         }
 
@@ -333,28 +294,29 @@ public class TikvStdSessions extends TikvSessions {
          */
         @Override
         public void deleteRange(String table, byte[] keyFrom, byte[] keyTo) {
-            ByteString startKey = TikvStdSessions.toTikvKey(table, keyFrom);
-            ByteString endKey = TikvStdSessions.toTikvKey(table, keyTo);
+            ByteString startKey = this.toTikvKey(table, keyFrom);
+            ByteString endKey = this.toTikvKey(table, keyTo);
             this.deleteRangeBatch.put(startKey, endKey);
         }
 
         @Override
         public byte[] get(String table, byte[] key) {
-            return tikv().get(TikvStdSessions.toTikvKey(table, key)).toByteArray();
+            Optional<ByteString> values = tikv().get(this.toTikvKey(table, key));
+            return values.isPresent()? values.get().toByteArray() : new byte[0];
         }
 
         @Override
         public BackendColumnIterator scan(String table) {
             assert !this.hasChanges();
-            List<Kvrpcpb.KvPair> results = tikv().scan(ByteString.EMPTY,
-                                                       1000000);
+            Iterator<Kvrpcpb.KvPair> results = tikv().scanPrefix0(this.toTikvKey(table));
             return new ColumnIterator(table, results);
         }
 
         @Override
         public BackendColumnIterator scan(String table, byte[] prefix) {
             assert !this.hasChanges();
-            List<Kvrpcpb.KvPair> results = tikv().scanPrefix(ByteString.copyFrom(prefix));
+            Iterator<Kvrpcpb.KvPair> results = tikv().scanPrefix0(
+                    this.toTikvKey(table, prefix));
             return new ColumnIterator(table, results);
         }
 
@@ -362,35 +324,57 @@ public class TikvStdSessions extends TikvSessions {
         public BackendColumnIterator scan(String table, byte[] keyFrom,
                                           byte[] keyTo, int scanType) {
             assert !this.hasChanges();
-            List<Kvrpcpb.KvPair> results;
-            results = tikv().scan(ByteString.copyFrom(keyFrom),
-                                  ByteString.copyFrom(keyTo), 5000);
+            Iterator<Kvrpcpb.KvPair> results;
+            if (keyFrom == null) {
+                results = tikv().scanPrefix0(this.toTikvKey(table));
+            } else {
+                if (keyTo == null) {
+                    results = tikv().scan0(this.toTikvKey(table, keyFrom), Key.toRawKey(this.toTikvKey(table)).nextPrefix().toByteString());
+                } else {
+                    results = tikv().scan0(this.toTikvKey(table, keyFrom), Key.toRawKey(this.toTikvKey(table, keyTo)).nextPrefix().toByteString());
+                }
+            }
             return new ColumnIterator(table, results, keyFrom, keyTo, scanType);
         }
 
+        protected ByteString toTikvKey(String table) {
+            byte[] prefix = table.getBytes();
+            byte[] actualKey = new byte[prefix.length + 1];
+            System.arraycopy(prefix, 0, actualKey, 0, prefix.length);
+            actualKey[prefix.length] = (byte) 0xff;
+            return ByteString.copyFrom(actualKey);
+        }
 
+        protected ByteString toTikvKey(String table, byte[] key) {
+            byte[] prefix = table.getBytes();
+            byte[] actualKey = new byte[prefix.length + 1 + key.length];
+            System.arraycopy(prefix, 0, actualKey, 0, prefix.length);
+            actualKey[prefix.length] = (byte) 0xff;
+            System.arraycopy(key, 0, actualKey, prefix.length + 1, key.length);
+            return ByteString.copyFrom(actualKey);
+        }
 
         private byte[] b(long value) {
             return ByteBuffer.allocate(Long.BYTES)
-                             .order(ByteOrder.nativeOrder())
-                             .putLong(value).array();
+                    .order(ByteOrder.nativeOrder())
+                    .putLong(value).array();
         }
 
         private long l(byte[] bytes) {
             assert bytes.length == Long.BYTES;
             return ByteBuffer.wrap(bytes)
-                             .order(ByteOrder.nativeOrder())
-                             .getLong();
+                    .order(ByteOrder.nativeOrder())
+                    .getLong();
         }
 
         private int size() {
             return this.putBatch.size() + this.deleteBatch.size() +
-                   this.deletePrefixBatch.size() + this.deleteRangeBatch.size();
+                    this.deletePrefixBatch.size() + this.deleteRangeBatch.size();
         }
     }
 
     private static class ColumnIterator implements BackendColumnIterator,
-                                        Countable {
+            Countable {
 
         private final String table;
         private final Iterator<Kvrpcpb.KvPair> iter;
@@ -403,16 +387,16 @@ public class TikvStdSessions extends TikvSessions {
         private byte[] value;
         private boolean matched;
 
-        public ColumnIterator(String table, List<Kvrpcpb.KvPair> results) {
+        public ColumnIterator(String table, Iterator<Kvrpcpb.KvPair> results) {
             this(table, results, null, null, 0);
         }
 
-        public ColumnIterator(String table, List<Kvrpcpb.KvPair> results,
+        public ColumnIterator(String table, Iterator<Kvrpcpb.KvPair> results,
                               byte[] keyBegin, byte[] keyEnd, int scanType) {
             E.checkNotNull(results, "results");
             this.table = table;
 
-            this.iter = results.iterator();
+            this.iter = results;
             this.keyBegin = keyBegin;
             this.keyEnd = keyEnd;
             this.scanType = scanType;
@@ -472,6 +456,21 @@ public class TikvStdSessions extends TikvSessions {
             return Session.matchScanType(expected, this.scanType);
         }
 
+        private byte[] toActualKey(String table, ByteString tikvKey) {
+            /*
+            byte[]prefix=("t"+table+"_r").getBytes();
+            intlength=tikvKey.size()-prefix.length;
+            byte[]key=newbyte[length];
+            System.arraycopy(tikvKey.toByteArray(),prefix.length,key,0,length);
+            */
+
+            byte[] prefix = table.getBytes();
+            int length = tikvKey.size() - prefix.length - 1;
+            byte[] key = new byte[length];
+            System.arraycopy(tikvKey, prefix.length + 1, key, 0, length);
+            return key;
+        }
+
         @Override
         public boolean hasNext() {
             // Update position for paging
@@ -480,7 +479,12 @@ public class TikvStdSessions extends TikvSessions {
             }
             Kvrpcpb.KvPair next = this.iter.next();
 
-            this.position = TikvStdSessions.toActualKey(this.table, next.getKey());
+            byte[] tikvKey = next.getKey().toByteArray();
+            byte[] prefix = this.table.getBytes();
+            int length = tikvKey.length - prefix.length - 1;
+            byte[] key = new byte[length];
+            System.arraycopy(tikvKey, prefix.length + 1, key, 0, length);
+            this.position = toActualKey(this.table, next.getKey());
             this.value = next.getValue().toByteArray();
 
             // Do filter if not SCAN_ANY
@@ -527,9 +531,9 @@ public class TikvStdSessions extends TikvSessions {
                 }
             } else {
                 assert this.match(Session.SCAN_ANY) ||
-                       this.match(Session.SCAN_GT_BEGIN) ||
-                       this.match(Session.SCAN_GTE_BEGIN) :
-                       "Unknow scan type";
+                        this.match(Session.SCAN_GT_BEGIN) ||
+                        this.match(Session.SCAN_GTE_BEGIN) :
+                        "Unknow scan type";
                 return true;
             }
         }
@@ -542,7 +546,7 @@ public class TikvStdSessions extends TikvSessions {
                 }
             }
             BackendEntry.BackendColumn col = BackendEntry.BackendColumn.of(
-                                             this.position, this.value);
+                    this.position, this.value);
             this.matched = false;
 
             return col;
